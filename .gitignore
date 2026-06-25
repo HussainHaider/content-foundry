@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# AI Content Marketing Engine — project-specific
+brand_docs/*.pdf
+brand_docs/*.txt
+brand_docs/*.md
+!brand_docs/.gitkeep
+output/
+qdrant_data/

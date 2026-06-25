@@ -1,0 +1,40 @@
+version: "3.9"
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - VOYAGE_API_KEY=${VOYAGE_API_KEY}
+      - SERPER_API_KEY=${SERPER_API_KEY}
+      - QDRANT_URL=http://qdrant:6333
+      - NOTION_TOKEN=${NOTION_TOKEN}
+      - NOTION_DATABASE_ID=${NOTION_DATABASE_ID}
+      - BUFFER_TOKEN=${BUFFER_TOKEN}
+      - BUFFER_PROFILE_IDS=${BUFFER_PROFILE_IDS}
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
+      - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2}
+      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT}
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    volumes:
+      - ./brand_docs:/app/brand_docs
+      - ./output:/app/output
+
+volumes:
+  qdrant_data:
