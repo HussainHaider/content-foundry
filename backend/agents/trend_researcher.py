@@ -12,16 +12,12 @@ Returns JSON parsed into state fields.
 
 import os
 import json
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_community.utilities import GoogleSerperAPIWrapper
 from backend.graph.state import ContentState
+from backend.llm import get_llm
 
-llm = ChatAnthropic(
-    model="claude-sonnet-4-6",
-    temperature=0.3,
-    anthropic_api_key=os.environ["ANTHROPIC_API_KEY"],
-)
+llm = get_llm(temperature=0.3)
 
 search_tool = GoogleSerperAPIWrapper(serper_api_key=os.environ.get("SERPER_API_KEY", ""))
 

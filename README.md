@@ -16,7 +16,7 @@ A **production-grade multi-agent AI system** that turns a single brand brief int
 ## Tech stack
 
 - **LangGraph** — multi-agent state machine (parallel `Send()` fan-out, conditional QA routing, cyclic re-write loop)
-- **Anthropic Claude** (`claude-sonnet-4-6`) — the LLM behind every agent
+- **OpenAI GPT-4o** (primary) + **Anthropic Claude `claude-sonnet-4-6`** (automatic fallback) — all agents use the same factory in `backend/llm.py`; if OpenAI hits a rate limit or outage, every call transparently retries against Claude
 - **Qdrant** — vector database for RAG
 - **Streamlit** — UI
 - **Serper API** — web search
@@ -96,16 +96,19 @@ docker compose up --build
 
 | Key | Required | Notes |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | ✅ | Claude (all agents) |
+| `OPENAI_API_KEY` | ✅ primary LLM | All agents use this first |
+| `OPENAI_MODEL` | optional | Model name, defaults to `gpt-4o` |
+| `ANTHROPIC_API_KEY` | ✅ fallback LLM | Auto-used if OpenAI fails; set both for full protection |
+| `ANTHROPIC_MODEL` | optional | Model name, defaults to `claude-sonnet-4-6` |
 | `VOYAGE_API_KEY` | ✅ | RAG embeddings (`voyage-3`, 1024 dims) — key at voyageai.com |
 | `SERPER_API_KEY` | ✅ | Web search — free key at serper.dev (2500/month) |
 | `QDRANT_URL` | ✅ | `http://localhost:6333` locally; cluster URL for cloud |
 | `QDRANT_API_KEY` | for cloud | Only needed for Qdrant Cloud |
 | `NOTION_TOKEN`, `NOTION_DATABASE_ID` | optional | Publishing — app works without these |
 | `BUFFER_TOKEN`, `BUFFER_PROFILE_IDS` | optional | Publishing — app works without these |
-| `LANGCHAIN_API_KEY`, `LANGCHAIN_TRACING_V2`, `LANGCHAIN_PROJECT` | optional | LangSmith observability |
+| `LANGSMITH_API_KEY`, `LANGSMITH_TRACING`, `LANGCHAIN_PROJECT` | optional | LangSmith observability |
 
-If publishing keys are absent, the publisher saves all content to `./output/` as Markdown.
+If only one LLM key is set, the app uses whichever is available (no fallback). If publishing keys are absent, the publisher saves all content to `./output/` as Markdown.
 
 ## Deployment
 

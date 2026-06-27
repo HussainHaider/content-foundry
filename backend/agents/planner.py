@@ -16,15 +16,11 @@ The 'notes' field gives the writer a strategic angle to follow.
 import os
 import json
 import re
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage
 from backend.graph.state import ContentState
+from backend.llm import get_llm
 
-llm = ChatAnthropic(
-    model="claude-sonnet-4-6",
-    temperature=0.4,
-    anthropic_api_key=os.environ["ANTHROPIC_API_KEY"],
-)
+llm = get_llm(temperature=0.4)
 
 SYSTEM_PROMPT = """You are a content marketing strategist.
 Build a 4-week content calendar based on the brief, keywords, and brand context.

@@ -18,15 +18,11 @@ Nodes:
 """
 
 import os
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage
 from backend.graph.state import ContentState, ContentPiece
+from backend.llm import get_llm
 
-llm = ChatAnthropic(
-    model="claude-sonnet-4-6",
-    temperature=0.7,
-    anthropic_api_key=os.environ["ANTHROPIC_API_KEY"],
-)
+llm = get_llm(temperature=0.7)
 
 
 def _build_context(state: ContentState) -> str:
