@@ -26,13 +26,20 @@ BUFFER_TOKEN       = os.environ.get("BUFFER_TOKEN", "")
 BUFFER_PROFILE_IDS = [p for p in os.environ.get("BUFFER_PROFILE_IDS", "").split(",") if p]
 
 
+_ILLEGAL = str.maketrans({c: "" for c in r':?*/\\"<>|'})
+
+
+def _safe_filename(channel: str, topic: str) -> str:
+    slug = topic[:40].translate(_ILLEGAL).replace(" ", "_").strip("_")
+    return f"{channel}_{slug}.md"
+
+
 def _save_to_file(piece: ContentPiece) -> str:
     """Fallback: save to local ./output/ directory if no API keys set."""
     output_dir = Path("./output")
     output_dir.mkdir(exist_ok=True)
-    filename = f"{piece['channel']}_{piece['topic'][:40].replace(' ', '_')}.md"
-    filepath = output_dir / filename
-    filepath.write_text(piece["draft"])
+    filepath = output_dir / _safe_filename(piece["channel"], piece["topic"])
+    filepath.write_text(piece["draft"], encoding="utf-8")
     return str(filepath)
 
 

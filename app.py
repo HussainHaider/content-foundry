@@ -120,7 +120,6 @@ if run_btn:
         "qa": 0.13,
         "publisher": 0.10,
     }
-    progress_so_far = 0.0
     log_lines = []
 
     AGENT_LABELS = {
@@ -135,10 +134,9 @@ if run_btn:
         "publisher":        "📤 Publisher — pushing to Notion & Buffer",
     }
 
-    final_state = {}
-
     async def run_with_streaming():
-        global progress_so_far, final_state
+        _progress = 0.0
+        collected = {}
         async for event in content_graph.astream_events(initial_state, version="v2"):
             kind = event.get("event", "")
             node = event.get("name", "")
@@ -150,23 +148,25 @@ if run_btn:
                 agent_log.text("\n".join(log_lines[-8:]))
 
             elif kind == "on_chain_end" and node in NODE_WEIGHTS:
-                progress_so_far = min(progress_so_far + NODE_WEIGHTS.get(node, 0.05), 1.0)
-                progress_bar.progress(progress_so_far)
+                _progress = min(_progress + NODE_WEIGHTS.get(node, 0.05), 1.0)
+                progress_bar.progress(_progress)
                 label = AGENT_LABELS.get(node, node)
                 log_lines.append(f"✅ {label}")
                 agent_log.text("\n".join(log_lines[-8:]))
 
-                # Capture final state from last event
                 output = event.get("data", {}).get("output", {})
                 if output:
-                    final_state.update(output)
+                    collected.update(output)
 
         progress_bar.progress(1.0)
         status_text.success("✅ All agents complete!")
+        return collected
 
-    asyncio.run(run_with_streaming())
+    st.session_state["final_state"] = asyncio.run(run_with_streaming())
 
-    # ── Results tabs ─────────────────────────────────────────────────────────
+# ── Results tabs (persist across reruns via session_state) ────────────────────
+final_state = st.session_state.get("final_state")
+if final_state:
     st.divider()
     st.subheader("📦 Generated content")
 
