@@ -75,9 +75,13 @@ def qa_node(state: ContentState) -> dict:
             "content_pieces": None,
         }
 
+    pieces_index = "\n".join(
+        f"{i}. channel={p['channel']} topic={p['topic']}"
+        for i, p in enumerate(pieces)
+    )
     pieces_text = "\n\n".join(
-        f"=== {p['channel'].upper()} | {p['topic']} ===\n{p['draft']}"
-        for p in pieces
+        f"=== [{i}] {p['channel'].upper()} | {p['topic']} ===\n{p['draft']}"
+        for i, p in enumerate(pieces)
     )
 
     response = llm.invoke([
@@ -89,10 +93,13 @@ Audience: {state['target_audience']}
 Brand voice reference:
 {state['brand_context'][:800]}
 
-Content to evaluate:
+Pieces to evaluate (echo the exact topic string in your JSON response):
+{pieces_index}
+
+Content:
 {pieces_text}
 
-Evaluate every piece. Return JSON only.
+Evaluate every piece. In your JSON, the "topic" field MUST exactly match the topic listed above. Return JSON only.
 """),
     ])
 
@@ -108,8 +115,15 @@ Evaluate every piece. Return JSON only.
 
     for result in parsed.get("pieces", []):
         matching = next(
-            (p for p in pieces if p["channel"] == result["channel"]), None
+            (p for p in pieces
+             if p["channel"] == result["channel"] and p["topic"] == result.get("topic", p["topic"])),
+            None,
         )
+        if matching is None:
+            # fallback: match channel only (handles topic truncation by LLM)
+            matched_channels = [p for p in pieces if p["channel"] == result["channel"]]
+            used_topics = {p["topic"] for p in approved + rejected}
+            matching = next((p for p in matched_channels if p["topic"] not in used_topics), None)
         if not matching:
             continue
 
