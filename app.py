@@ -190,7 +190,7 @@ if run_btn:
     with tab_blog:
         blog_pieces = [p for p in approved if p["channel"] == "blog"]
         if blog_pieces:
-            for p in blog_pieces:
+            for i, p in enumerate(blog_pieces):
                 with st.expander(p["topic"], expanded=True):
                     col1, col2 = st.columns([4, 1])
                     with col1:
@@ -201,6 +201,7 @@ if run_btn:
                             "⬇️ Download",
                             p["draft"],
                             file_name=f"blog_{p['topic'][:30]}.md",
+                            key=f"dl_blog_{i}",
                         )
         else:
             st.info("Blog posts will appear here.")
@@ -208,30 +209,30 @@ if run_btn:
     with tab_social:
         social_pieces = [p for p in approved if p["channel"] == "social"]
         if social_pieces:
-            for p in social_pieces:
+            for i, p in enumerate(social_pieces):
                 with st.expander(p["topic"], expanded=True):
-                    st.text_area("Copy", p["draft"], height=300, label_visibility="collapsed")
-                    st.download_button("⬇️ Download", p["draft"], f"social_{p['topic'][:30]}.txt")
+                    st.text_area("Copy", p["draft"], height=300, label_visibility="collapsed", key=f"ta_social_{i}")
+                    st.download_button("⬇️ Download", p["draft"], f"social_{p['topic'][:30]}.txt", key=f"dl_social_{i}")
         else:
             st.info("Social copy will appear here.")
 
     with tab_email:
         email_pieces = [p for p in approved if p["channel"] == "email"]
         if email_pieces:
-            for p in email_pieces:
+            for i, p in enumerate(email_pieces):
                 with st.expander(p["topic"], expanded=True):
-                    st.text_area("Email", p["draft"], height=300, label_visibility="collapsed")
-                    st.download_button("⬇️ Download", p["draft"], f"email_{p['topic'][:30]}.txt")
+                    st.text_area("Email", p["draft"], height=300, label_visibility="collapsed", key=f"ta_email_{i}")
+                    st.download_button("⬇️ Download", p["draft"], f"email_{p['topic'][:30]}.txt", key=f"dl_email_{i}")
         else:
             st.info("Email newsletters will appear here.")
 
     with tab_ad:
         ad_pieces = [p for p in approved if p["channel"] == "ad"]
         if ad_pieces:
-            for p in ad_pieces:
+            for i, p in enumerate(ad_pieces):
                 with st.expander(p["topic"], expanded=True):
-                    st.text_area("Ad copy", p["draft"], height=300, label_visibility="collapsed")
-                    st.download_button("⬇️ Download", p["draft"], f"ad_{p['topic'][:30]}.txt")
+                    st.text_area("Ad copy", p["draft"], height=300, label_visibility="collapsed", key=f"ta_ad_{i}")
+                    st.download_button("⬇️ Download", p["draft"], f"ad_{p['topic'][:30]}.txt", key=f"dl_ad_{i}")
         else:
             st.info("Ad copy will appear here.")
 

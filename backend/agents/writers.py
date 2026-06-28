@@ -88,7 +88,7 @@ def blog_writer_node(state: ContentState) -> dict:
         "revision_count": revision_count,
         "published_url": None,
     }
-    return {"content_pieces": state.get("content_pieces", []) + [piece]}
+    return {"content_pieces": [piece]}
 
 
 # ── SOCIAL WRITER ────────────────────────────────────────────────────────────
@@ -130,7 +130,7 @@ def social_writer_node(state: ContentState) -> dict:
         "revision_count": revision_count,
         "published_url": None,
     }
-    return {"content_pieces": state.get("content_pieces", []) + [piece]}
+    return {"content_pieces": [piece]}
 
 
 # ── EMAIL WRITER ─────────────────────────────────────────────────────────────
@@ -170,7 +170,7 @@ def email_writer_node(state: ContentState) -> dict:
         "revision_count": revision_count,
         "published_url": None,
     }
-    return {"content_pieces": state.get("content_pieces", []) + [piece]}
+    return {"content_pieces": [piece]}
 
 
 # ── AD COPY WRITER ───────────────────────────────────────────────────────────
@@ -217,4 +217,4 @@ def ad_copy_writer_node(state: ContentState) -> dict:
         "revision_count": revision_count,
         "published_url": None,
     }
-    return {"content_pieces": state.get("content_pieces", []) + [piece]}
+    return {"content_pieces": [piece]}

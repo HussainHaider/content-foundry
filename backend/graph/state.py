@@ -8,6 +8,13 @@ from typing import TypedDict, Annotated, Literal
 from langgraph.graph.message import add_messages
 
 
+def _merge_content_pieces(left: list, right: list | None) -> list:
+    """Reducer for content_pieces: None resets the list; a list is appended."""
+    if right is None:
+        return []
+    return (left or []) + right
+
+
 class ContentPiece(TypedDict):
     """Represents one generated content item (one channel, one week)."""
     channel: Literal["blog", "social", "email", "ad"]
@@ -40,7 +47,7 @@ class ContentState(TypedDict):
     monthly_themes: list[str]     # 4 weekly themes
 
     # ── Writer outputs ──────────────────────────────────────────────
-    content_pieces: list[ContentPiece]   # Current round drafts
+    content_pieces: Annotated[list[ContentPiece], _merge_content_pieces]
     current_calendar_entry: dict         # Set by Send() fan-out, one per writer
     revision_target: dict                # Set during re-write loops
 

@@ -72,7 +72,7 @@ def qa_node(state: ContentState) -> dict:
             "approved_pieces": state.get("approved_pieces", []),
             "rejected_pieces": [],
             "revision_round": state.get("revision_round", 0) + 1,
-            "content_pieces": [],
+            "content_pieces": None,
         }
 
     pieces_text = "\n\n".join(
@@ -131,5 +131,5 @@ Evaluate every piece. Return JSON only.
         "rejected_pieces": rejected,
         "qa_feedback":     qa_feedback,
         "revision_round":  state.get("revision_round", 0) + 1,
-        "content_pieces":  [],  # Clear for next round
+        "content_pieces":  None,  # None triggers reset via reducer
     }
