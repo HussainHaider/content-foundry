@@ -25,7 +25,10 @@ python -m backend.rag.ingest --docs ./brand_docs/
 # Start the Streamlit app
 streamlit run app.py
 
-# Docker (starts Qdrant + app together)
+# Start the Storyblok publishing service (needed for the "Publish to Storyblok" button)
+uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
+
+# Docker (starts Qdrant + app + publishing API together)
 docker compose up --build
 docker compose exec app python -m backend.rag.ingest --docs ./brand_docs/
 ```
@@ -59,6 +62,8 @@ START → rag_retriever → trend_researcher → planner
 
 **Publishing fallback** — `publisher_node` checks for `NOTION_TOKEN` / `BUFFER_TOKEN` at call time (module-level vars). If absent, it saves each piece to `./output/<channel>_<topic>.md` silently.
 
+**Storyblok publishing (isolated, outside the graph)** — a separate **FastAPI service** (`backend/api/main.py`) exposes `POST /publish/storyblok`. The Streamlit "Publish to Storyblok" button (in the Blog tab) calls it over HTTP via `backend/publishing/publisher_client.py` with an `X-API-Key`. The FastAPI process is the **only** place the Storyblok Management token lives — Streamlit never sees it. Publishing logic is in `backend/publishing/storyblok/` (config → client → schema discovery → markdown→`text`-bloks → mapper → service). It discovers the space's component schema at runtime (no hardcoding, no dependency on the separate `content-foundry-ui` repo), maps each weekly blog onto a `page` of existing `text` bloks, and creates one **draft** story per blog (idempotent via deterministic slugs). This path does **not** touch the LangGraph graph or any existing agent.
+
 ### Module layout
 
 | Path | Role |
@@ -69,6 +74,9 @@ START → rag_retriever → trend_researcher → planner
 | `backend/rag/ingest.py` | One-shot CLI: load docs → chunk → embed → store in Qdrant |
 | `backend/rag/retriever.py` | `rag_retriever_node`: queries Qdrant, populates `brand_context` |
 | `backend/agents/` | One file per agent: `trend_researcher`, `planner`, `writers`, `qa_agent`, `publisher` |
+| `backend/api/` | FastAPI publishing service (`main.py`, `models.py`) — owns the Storyblok token |
+| `backend/publishing/storyblok/` | Storyblok logic: `config`, `client`, `schema`, `markdown_blocks`, `mapper`, `service` |
+| `backend/publishing/publisher_client.py` | Streamlit → FastAPI HTTP client (no Storyblok token) |
 | `app.py` | Streamlit UI: sidebar inputs → `content_graph.astream_events()` → live progress + results tabs |
 
 ## Environment variables
@@ -85,6 +93,12 @@ START → rag_retriever → trend_researcher → planner
 | `QDRANT_API_KEY` | Qdrant Cloud only |
 | `NOTION_TOKEN`, `NOTION_DATABASE_ID` | Publishing to Notion |
 | `BUFFER_TOKEN`, `BUFFER_PROFILE_IDS` | Publishing to Buffer |
+| `STORYBLOK_MANAGEMENT_TOKEN` | Storyblok write token — **FastAPI service only** (never set in the Streamlit process) |
+| `STORYBLOK_SPACE_ID` | Target Storyblok space (FastAPI service) |
+| `STORYBLOK_REGION` | Storyblok MAPI host: `eu` (default), `us`, `ap`, `ca`, `cn` |
+| `STORYBLOK_BLOG_PARENT_ID` | Optional folder story id to nest blogs under |
+| `PUBLISHER_API_KEY` | Shared internal key between Streamlit and the FastAPI publisher (both processes) |
+| `PUBLISHER_API_URL` | FastAPI base URL seen by Streamlit (`http://localhost:8000` local, `http://api:8000` in compose) |
 | `LANGSMITH_API_KEY` | LangSmith tracing (optional) |
 
 At least one of `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` must be set. Both is recommended.
@@ -94,3 +108,5 @@ At least one of `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` must be set. Both is reco
 - **`from langgraph.constants import Send`** is deprecated as of LangGraph 1.0; the correct import is `from langgraph.types import Send`. Both `builder.py` and `tests/test_graph.py` still use the old path (works until LangGraph 2.0).
 - **LLM factory** (`backend/llm.py`) — `get_llm()` is called at module import in each agent (not lazily). Pytest therefore needs dummy env vars (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `SERPER_API_KEY`, `VOYAGE_API_KEY`) to collect tests; see the dummy-key command above. `with_fallbacks()` is only invoked at call time, not import time.
 - The Streamlit `asyncio.run(run_with_streaming())` pattern works for Streamlit ≥ 1.39 but will conflict if a running event loop already exists (e.g. inside Jupyter). Use the app via `streamlit run` only.
+- **Storyblok token rotation** — the `content-foundry-ui` repo's `.mcp.json` previously contained a literal `sb_pat_...` token; it has been replaced with `${STORYBLOK_MCP_TOKEN}` interpolation. The previously-committed token must be **rotated** in the Storyblok UI (treat as compromised). Use a *separate* write-scoped Management token for `STORYBLOK_MANAGEMENT_TOKEN` (the FastAPI service), distinct from the MCP dev token.
+- **Storyblok publishing tests** (`tests/test_storyblok_publishing.py`) mock httpx and do not import the graph, so they collect without LLM keys. The Storyblok modules read env lazily (`StoryblokConfig.from_env()`), so no dummy `STORYBLOK_*` keys are needed to import them.

@@ -34,9 +34,9 @@ Return ONLY valid JSON (no markdown, no explanation):
 
 def trend_researcher_node(state: ContentState) -> dict:
     search_queries = [
-        f"{state['brief']} trending topics 2025",
+        f"{state['brief']} trending topics 2026",
         f"{state['brand_name']} competitors content marketing strategy",
-        f"{state['target_audience']} biggest pain points questions 2025",
+        f"{state['target_audience']} biggest pain points questions 2026",
     ]
 
     search_results = []

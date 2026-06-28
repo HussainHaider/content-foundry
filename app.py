@@ -13,6 +13,7 @@ load_dotenv()
 
 from backend.graph.builder import content_graph
 from backend.graph.state import ContentState
+from backend.publishing import publisher_client
 
 st.set_page_config(
     page_title="AI Content Marketing Engine",
@@ -203,6 +204,52 @@ if final_state:
                             file_name=f"blog_{p['topic'][:30]}.md",
                             key=f"dl_blog_{i}",
                         )
+
+            # ── Publish to Storyblok (isolated extension, outside the graph) ──
+            st.divider()
+            st.markdown("#### 📤 Publish to Storyblok")
+            health = publisher_client.check_health()
+            if not health:
+                st.caption(
+                    "⚠️ Publishing service unreachable. Start it with "
+                    "`uvicorn backend.api.main:app --port 8000` and set "
+                    "`PUBLISHER_API_URL` / `PUBLISHER_API_KEY`."
+                )
+            elif not health.get("storyblok_configured"):
+                st.caption(
+                    "⚠️ Storyblok not configured on the publishing service "
+                    "(set `STORYBLOK_MANAGEMENT_TOKEN` and `STORYBLOK_SPACE_ID`)."
+                )
+            else:
+                calendar = final_state.get("content_calendar", [])
+                week_by_topic = {
+                    e.get("topic"): e.get("week", 1)
+                    for e in calendar
+                    if e.get("channel") == "blog"
+                }
+                if st.button(
+                    "📤 Publish all blogs to Storyblok (draft)",
+                    key="publish_sb_all",
+                    use_container_width=True,
+                ):
+                    payload = [
+                        {
+                            "topic": p["topic"],
+                            "draft": p["draft"],
+                            "week": week_by_topic.get(p["topic"], idx + 1),
+                        }
+                        for idx, p in enumerate(blog_pieces)
+                    ]
+                    with st.spinner("Publishing to Storyblok..."):
+                        try:
+                            resp = publisher_client.publish_blogs(payload, publish=False)
+                            st.session_state["storyblok_results"] = resp.get("results", [])
+                        except RuntimeError as e:
+                            st.error(str(e))
+
+                results = st.session_state.get("storyblok_results")
+                if results:
+                    st.dataframe(pd.DataFrame(results), use_container_width=True)
         else:
             st.info("Blog posts will appear here.")
 

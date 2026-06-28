@@ -30,12 +30,29 @@ services:
       - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
       - LANGCHAIN_TRACING_V2=${LANGCHAIN_TRACING_V2}
       - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT}
+      # Reach the FastAPI publisher over the compose network (no Storyblok token here)
+      - PUBLISHER_API_URL=http://api:8000
+      - PUBLISHER_API_KEY=${PUBLISHER_API_KEY}
     depends_on:
       qdrant:
         condition: service_healthy
     volumes:
       - ./brand_docs:/app/brand_docs
       - ./output:/app/output
+
+  # Storyblok publishing service — the ONLY process that holds the Management token
+  api:
+    build: .
+    command: >
+      uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - STORYBLOK_MANAGEMENT_TOKEN=${STORYBLOK_MANAGEMENT_TOKEN}
+      - STORYBLOK_SPACE_ID=${STORYBLOK_SPACE_ID}
+      - STORYBLOK_REGION=${STORYBLOK_REGION}
+      - STORYBLOK_BLOG_PARENT_ID=${STORYBLOK_BLOG_PARENT_ID}
+      - PUBLISHER_API_KEY=${PUBLISHER_API_KEY}
 
 volumes:
   qdrant_data:

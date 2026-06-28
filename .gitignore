@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+# MCP config (contains API tokens — never commit)
+.mcp.json
+
 # Distribution / packaging
 .Python
 build/
