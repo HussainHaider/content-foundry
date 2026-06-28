@@ -26,7 +26,10 @@ def rag_retriever_node(state: ContentState) -> dict:
         f"for: {state['target_audience']}. Brief: {state['brief']}"
     )
 
-    client = QdrantClient(url=os.environ.get("QDRANT_URL", "http://localhost:6333"))
+    qdrant_kwargs = {"url": os.environ.get("QDRANT_URL", "http://localhost:6333")}
+    if os.environ.get("QDRANT_API_KEY"):
+        qdrant_kwargs["api_key"] = os.environ["QDRANT_API_KEY"]
+    client = QdrantClient(**qdrant_kwargs)
     embeddings = VoyageAIEmbeddings(
         model="voyage-3",
         voyage_api_key=os.environ["VOYAGE_API_KEY"],

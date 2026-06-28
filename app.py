@@ -58,8 +58,13 @@ with st.sidebar:
         if st.button("Ingest brand docs into RAG"):
             with st.spinner("Indexing documents..."):
                 from backend.rag.ingest import ingest
-                n = ingest("./brand_docs/")
-                st.success(f"✅ Indexed {n} chunks")
+                try:
+                    n = ingest("./brand_docs/")
+                    st.success(f"✅ Indexed {n} chunks")
+                except RuntimeError as e:
+                    st.error(str(e))
+                except Exception as e:
+                    st.error(f"Ingestion failed: {e}")
 
     st.divider()
     run_btn = st.button(

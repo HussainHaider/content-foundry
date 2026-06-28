@@ -16,6 +16,7 @@ qdrant-client>=1.11.0
 
 # Document parsing for RAG ingestion
 pymupdf>=1.24.0
+pypdf>=4.0.0
 
 # Web search (Serper, via langchain-community's GoogleSerperAPIWrapper)
 requests>=2.32.0
