@@ -82,13 +82,15 @@ Research this opportunity, then summarize your findings.
         parsed = json.loads(response.content)
     except json.JSONDecodeError:
         # Fallback if LLM adds markdown
-        match = re.search(r'\{.*\}', response.content, re.DOTALL)
-        parsed = json.loads(match.group()) if match else {
-            "trending_keywords": [], "competitor_gaps": []
-        }
+        match = re.search(r"\{.*\}", response.content, re.DOTALL)
+        parsed = (
+            json.loads(match.group())
+            if match
+            else {"trending_keywords": [], "competitor_gaps": []}
+        )
 
     return {
         "trending_keywords": parsed.get("trending_keywords", []),
-        "competitor_gaps":   parsed.get("competitor_gaps", []),
-        "search_results":    search_results,
+        "competitor_gaps": parsed.get("competitor_gaps", []),
+        "search_results": search_results,
     }

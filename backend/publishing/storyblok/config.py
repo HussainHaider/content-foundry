@@ -40,7 +40,9 @@ class StoryblokConfig:
             management_token=os.environ.get("STORYBLOK_MANAGEMENT_TOKEN", "").strip(),
             space_id=os.environ.get("STORYBLOK_SPACE_ID", "").strip(),
             region=(os.environ.get("STORYBLOK_REGION", "eu").strip().lower() or "eu"),
-            blog_parent_id=(os.environ.get("STORYBLOK_BLOG_PARENT_ID", "").strip() or None),
+            blog_parent_id=(
+                os.environ.get("STORYBLOK_BLOG_PARENT_ID", "").strip() or None
+            ),
         )
 
     def is_configured(self) -> bool:

@@ -76,17 +76,17 @@ def qa_node(state: ContentState) -> dict:
         }
 
     pieces_index = "\n".join(
-        f"{i}. channel={p['channel']} topic={p['topic']}"
-        for i, p in enumerate(pieces)
+        f"{i}. channel={p['channel']} topic={p['topic']}" for i, p in enumerate(pieces)
     )
     pieces_text = "\n\n".join(
         f"=== [{i}] {p['channel'].upper()} | {p['topic']} ===\n{p['draft']}"
         for i, p in enumerate(pieces)
     )
 
-    response = llm.invoke([
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=f"""
+    response = llm.invoke(
+        [
+            SystemMessage(content=SYSTEM_PROMPT),
+            HumanMessage(content=f"""
 Brand: {state['brand_name']}
 Audience: {state['target_audience']}
 
@@ -101,12 +101,13 @@ Content:
 
 Evaluate every piece. In your JSON, the "topic" field MUST exactly match the topic listed above. Return JSON only.
 """),
-    ])
+        ]
+    )
 
     try:
         parsed = json.loads(response.content)
     except json.JSONDecodeError:
-        match = re.search(r'\{.*\}', response.content, re.DOTALL)
+        match = re.search(r"\{.*\}", response.content, re.DOTALL)
         parsed = json.loads(match.group()) if match else {"pieces": []}
 
     approved: list[ContentPiece] = []
@@ -115,15 +116,21 @@ Evaluate every piece. In your JSON, the "topic" field MUST exactly match the top
 
     for result in parsed.get("pieces", []):
         matching = next(
-            (p for p in pieces
-             if p["channel"] == result["channel"] and p["topic"] == result.get("topic", p["topic"])),
+            (
+                p
+                for p in pieces
+                if p["channel"] == result["channel"]
+                and p["topic"] == result.get("topic", p["topic"])
+            ),
             None,
         )
         if matching is None:
             # fallback: match channel only (handles topic truncation by LLM)
             matched_channels = [p for p in pieces if p["channel"] == result["channel"]]
             used_topics = {p["topic"] for p in approved + rejected}
-            matching = next((p for p in matched_channels if p["topic"] not in used_topics), None)
+            matching = next(
+                (p for p in matched_channels if p["topic"] not in used_topics), None
+            )
         if not matching:
             continue
 
@@ -143,7 +150,7 @@ Evaluate every piece. In your JSON, the "topic" field MUST exactly match the top
     return {
         "approved_pieces": state.get("approved_pieces", []) + approved,
         "rejected_pieces": rejected,
-        "qa_feedback":     qa_feedback,
-        "revision_round":  state.get("revision_round", 0) + 1,
-        "content_pieces":  None,  # None triggers reset via reducer
+        "qa_feedback": qa_feedback,
+        "revision_round": state.get("revision_round", 0) + 1,
+        "content_pieces": None,  # None triggers reset via reducer
     }

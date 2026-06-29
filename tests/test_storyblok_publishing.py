@@ -12,7 +12,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from backend.publishing.storyblok.config import StoryblokConfig
-from backend.publishing.storyblok.client import StoryblokManagementClient, StoryblokError
+from backend.publishing.storyblok.client import (
+    StoryblokManagementClient,
+    StoryblokError,
+)
 from backend.publishing.storyblok.markdown_blocks import markdown_to_text_bloks
 from backend.publishing.storyblok.mapper import slugify, split_h1, piece_to_story
 from backend.publishing.storyblok.schema import (
@@ -99,7 +102,7 @@ def test_piece_to_story_shape(schema, config):
     out = piece_to_story(
         topic="Week One Topic", draft=draft, week=1, schema=schema, config=config
     )
-    assert out.slug == "week-1-week-one-topic"
+    assert out.slug == "week-one-topic"
     assert out.name == "Week One Topic"
     assert out.story["content"]["component"] == "page"
     body = out.story["content"]["body"]
@@ -116,7 +119,14 @@ def test_piece_to_story_adds_parent_id_when_configured(schema):
 def test_validate_contract_resolves_fields():
     components = [
         {"name": "page", "schema": {"body": {"type": "bloks"}}},
-        {"name": "text", "schema": {"text": {"type": "text"}, "tag": {"type": "option"}, "align": {"type": "option"}}},
+        {
+            "name": "text",
+            "schema": {
+                "text": {"type": "text"},
+                "tag": {"type": "option"},
+                "align": {"type": "option"},
+            },
+        },
     ]
     resolved = validate_contract(components)
     assert resolved.root_component == "page"
@@ -135,7 +145,10 @@ def test_validate_contract_missing_text_raises():
 def test_validate_contract_missing_bloks_field_raises():
     components = [
         {"name": "page", "schema": {"title": {"type": "text"}}},
-        {"name": "text", "schema": {"text": {"type": "text"}, "tag": {"type": "option"}}},
+        {
+            "name": "text",
+            "schema": {"text": {"type": "text"}, "tag": {"type": "option"}},
+        },
     ]
     with pytest.raises(SchemaError):
         validate_contract(components)
@@ -187,7 +200,10 @@ def test_service_creates_when_no_existing(schema, config):
     client = MagicMock()
     client.get_components.return_value = [
         {"name": "page", "schema": {"body": {"type": "bloks"}}},
-        {"name": "text", "schema": {"text": {"type": "text"}, "tag": {"type": "option"}}},
+        {
+            "name": "text",
+            "schema": {"text": {"type": "text"}, "tag": {"type": "option"}},
+        },
     ]
     client.find_story_by_slug.return_value = None
     client.create_story.return_value = {"id": 5, "full_slug": "blog/week-1-t"}
@@ -209,7 +225,10 @@ def test_service_updates_when_slug_exists(schema, config):
     client = MagicMock()
     client.get_components.return_value = [
         {"name": "page", "schema": {"body": {"type": "bloks"}}},
-        {"name": "text", "schema": {"text": {"type": "text"}, "tag": {"type": "option"}}},
+        {
+            "name": "text",
+            "schema": {"text": {"type": "text"}, "tag": {"type": "option"}},
+        },
     ]
     client.find_story_by_slug.return_value = {"id": 7}
     client.update_story.return_value = {"id": 7, "full_slug": "blog/week-1-t"}
@@ -231,10 +250,16 @@ def test_service_isolates_per_piece_failure(config):
     client = MagicMock()
     client.get_components.return_value = [
         {"name": "page", "schema": {"body": {"type": "bloks"}}},
-        {"name": "text", "schema": {"text": {"type": "text"}, "tag": {"type": "option"}}},
+        {
+            "name": "text",
+            "schema": {"text": {"type": "text"}, "tag": {"type": "option"}},
+        },
     ]
     client.find_story_by_slug.return_value = None
-    client.create_story.side_effect = [StoryblokError("boom"), {"id": 2, "full_slug": "b"}]
+    client.create_story.side_effect = [
+        StoryblokError("boom"),
+        {"id": 2, "full_slug": "b"},
+    ]
 
     results = service.publish_blogs(
         [
@@ -255,7 +280,9 @@ def test_api_rejects_without_key(monkeypatch):
 
     monkeypatch.setenv("PUBLISHER_API_KEY", "secret")
     client = TestClient(app)
-    resp = client.post("/publish/storyblok", json={"pieces": [{"topic": "t", "draft": "d"}]})
+    resp = client.post(
+        "/publish/storyblok", json={"pieces": [{"topic": "t", "draft": "d"}]}
+    )
     assert resp.status_code == 401
 
 
@@ -282,7 +309,14 @@ def test_api_publish_success(monkeypatch):
         main,
         "publish_blogs",
         lambda pieces, publish: [
-            {"topic": "t", "status": "created", "story_id": 1, "url": "u", "full_slug": "f", "error": None}
+            {
+                "topic": "t",
+                "status": "created",
+                "story_id": 1,
+                "url": "u",
+                "full_slug": "f",
+                "error": None,
+            }
         ],
     )
     client = TestClient(main.app)

@@ -10,16 +10,20 @@ Chunks them with overlap and stores embeddings in Qdrant.
 
 import os
 import argparse
-from langchain_community.document_loaders import DirectoryLoader, TextLoader, PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import (
+    DirectoryLoader,
+    TextLoader,
+    PyPDFLoader,
+)
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_voyageai import VoyageAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 
 COLLECTION_NAME = "brand_content"
-CHUNK_SIZE      = 800
-CHUNK_OVERLAP   = 120
+CHUNK_SIZE = 800
+CHUNK_OVERLAP = 120
 
 
 def ingest(docs_path: str) -> int:
@@ -32,8 +36,11 @@ def ingest(docs_path: str) -> int:
     ):
         docs.extend(
             DirectoryLoader(
-                docs_path, glob=ext, loader_cls=loader_cls,
-                loader_kwargs=loader_kwargs, show_progress=True,
+                docs_path,
+                glob=ext,
+                loader_cls=loader_cls,
+                loader_kwargs=loader_kwargs,
+                show_progress=True,
             ).load()
         )
 

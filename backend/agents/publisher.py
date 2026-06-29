@@ -20,10 +20,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from backend.graph.state import ContentState, ContentPiece
 
-NOTION_TOKEN       = os.environ.get("NOTION_TOKEN", "")
+NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
 NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID", "")
-BUFFER_TOKEN       = os.environ.get("BUFFER_TOKEN", "")
-BUFFER_PROFILE_IDS = [p for p in os.environ.get("BUFFER_PROFILE_IDS", "").split(",") if p]
+BUFFER_TOKEN = os.environ.get("BUFFER_TOKEN", "")
+BUFFER_PROFILE_IDS = [
+    p for p in os.environ.get("BUFFER_PROFILE_IDS", "").split(",") if p
+]
 
 
 _ILLEGAL = str.maketrans({c: "" for c in r':?*/\\"<>|'})
@@ -55,15 +57,22 @@ def _publish_to_notion(piece: ContentPiece) -> str | None:
     payload = {
         "parent": {"database_id": NOTION_DATABASE_ID},
         "properties": {
-            "Name":    {"title": [{"text": {"content": piece["topic"]}}]},
+            "Name": {"title": [{"text": {"content": piece["topic"]}}]},
             "Channel": {"select": {"name": piece["channel"].capitalize()}},
-            "Status":  {"select": {"name": "Draft"}},
-            "QA Score":{"number": round(piece.get("seo_score", 0), 2)},
+            "Status": {"select": {"name": "Draft"}},
+            "QA Score": {"number": round(piece.get("seo_score", 0), 2)},
         },
-        "children": [{
-            "object": "block", "type": "paragraph",
-            "paragraph": {"rich_text": [{"type": "text", "text": {"content": piece["draft"][:2000]}}]}
-        }],
+        "children": [
+            {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [
+                        {"type": "text", "text": {"content": piece["draft"][:2000]}}
+                    ]
+                },
+            }
+        ],
     }
     try:
         resp = httpx.post(url, headers=headers, json=payload, timeout=10)
@@ -83,15 +92,17 @@ def _publish_to_buffer(piece: ContentPiece, index: int = 0) -> str | None:
             resp = httpx.post(
                 "https://api.bufferapp.com/1/updates/create.json",
                 data={
-                    "access_token":    BUFFER_TOKEN,
-                    "profile_ids[]":   profile_id,
-                    "text":            piece["draft"][:500],
-                    "scheduled_at":    scheduled,
+                    "access_token": BUFFER_TOKEN,
+                    "profile_ids[]": profile_id,
+                    "text": piece["draft"][:500],
+                    "scheduled_at": scheduled,
                 },
                 timeout=10,
             )
             if resp.status_code == 200:
-                return resp.json().get("updates", [{}])[0].get("id", "buffer://scheduled")
+                return (
+                    resp.json().get("updates", [{}])[0].get("id", "buffer://scheduled")
+                )
         except Exception as e:
             print(f"Buffer error: {e}")
     return None

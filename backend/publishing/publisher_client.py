@@ -31,7 +31,9 @@ def check_health(timeout: float = 3.0) -> dict | None:
     return None
 
 
-def publish_blogs(pieces: list[dict], publish: bool = False, timeout: float = 60.0) -> dict:
+def publish_blogs(
+    pieces: list[dict], publish: bool = False, timeout: float = 60.0
+) -> dict:
     """
     Call POST /publish/storyblok.
 

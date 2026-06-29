@@ -40,7 +40,7 @@ def split_h1(draft: str) -> tuple[str | None, str]:
     if not match:
         return None, (draft or "").strip()
     title = match.group(1).strip()
-    body = (draft[: match.start()] + draft[match.end():]).strip()
+    body = (draft[: match.start()] + draft[match.end() :]).strip()
     return title, body
 
 

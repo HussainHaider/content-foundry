@@ -78,12 +78,18 @@ class StoryblokManagementClient:
         last_exc: Exception | None = None
         for attempt in range(1, _MAX_ATTEMPTS + 1):
             try:
-                resp = self._client.request(method, url, headers=self._headers, **kwargs)
+                resp = self._client.request(
+                    method, url, headers=self._headers, **kwargs
+                )
             except httpx.HTTPError as exc:
                 last_exc = exc
                 logger.warning(
                     "storyblok %s %s transport error (attempt %d/%d): %s",
-                    method, _safe_url(url), attempt, _MAX_ATTEMPTS, exc,
+                    method,
+                    _safe_url(url),
+                    attempt,
+                    _MAX_ATTEMPTS,
+                    exc,
                 )
                 self._sleep(attempt)
                 continue
@@ -95,7 +101,11 @@ class StoryblokManagementClient:
             if resp.status_code == 429 or resp.status_code >= 500:
                 logger.warning(
                     "storyblok %s %s -> %d (attempt %d/%d)",
-                    method, _safe_url(url), resp.status_code, attempt, _MAX_ATTEMPTS,
+                    method,
+                    _safe_url(url),
+                    resp.status_code,
+                    attempt,
+                    _MAX_ATTEMPTS,
                 )
                 self._sleep(attempt, resp.headers.get("Retry-After"))
                 last_exc = StoryblokError(

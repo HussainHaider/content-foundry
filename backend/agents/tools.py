@@ -28,7 +28,6 @@ def web_search(query: str) -> str:
     """Search the general web for information on a topic. Use this for SEO
     keyword discovery, competitor content, and audience pain points."""
     try:
-        print(f"Searching the web for: {query}")
         return GoogleSerperAPIWrapper(serper_api_key=_serper_key()).run(query)
     except Exception as exc:  # noqa: BLE001 - never crash the graph on a bad search
         return f"Search unavailable for '{query}': {exc}"
@@ -39,8 +38,9 @@ def news_search(query: str) -> str:
     """Search recent news articles for fresh, time-sensitive trends and
     current events related to a topic."""
     try:
-        print(f"Searching news for: {query}")
-        return GoogleSerperAPIWrapper(type="news", serper_api_key=_serper_key()).run(query)
+        return GoogleSerperAPIWrapper(type="news", serper_api_key=_serper_key()).run(
+            query
+        )
     except Exception as exc:  # noqa: BLE001 - never crash the graph on a bad search
         return f"News search unavailable for '{query}': {exc}"
 

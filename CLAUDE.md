@@ -108,7 +108,8 @@ At least one of `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` must be set. Both is reco
 
 ## Known issues / gotchas
 
-- **`from langgraph.constants import Send`** is deprecated as of LangGraph 1.0; the correct import is `from langgraph.types import Send`. Both `builder.py` and `tests/test_graph.py` still use the old path (works until LangGraph 2.0).
+- **`Send` import** — use `from langgraph.types import Send` (the `langgraph.constants` path is deprecated in LangGraph 1.0 and removed in 2.0). `builder.py` and `tests/test_graph.py` use the `langgraph.types` path.
+- **Text splitter import** — `RecursiveCharacterTextSplitter` is imported from `langchain_text_splitters` (the old `langchain.text_splitter` shim was removed in LangChain 1.0). See `backend/rag/ingest.py`.
 - **LLM factory** (`backend/llm.py`) — `get_llm()` is called at module import in each agent (not lazily). Pytest therefore needs dummy env vars (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `SERPER_API_KEY`, `VOYAGE_API_KEY`) to collect tests; see the dummy-key command above. `with_fallbacks()` is only invoked at call time, not import time.
 - **Tool binding + fallbacks** — `get_llm_with_tools()` binds tools to each underlying LLM *before* `with_fallbacks()`, because `RunnableWithFallbacks` has **no `.bind_tools()`**. Don't try to call `.bind_tools()` on the result of `get_llm()`.
 - The Streamlit `asyncio.run(run_with_streaming())` pattern works for Streamlit ≥ 1.39 but will conflict if a running event loop already exists (e.g. inside Jupyter). Use the app via `streamlit run` only.
