@@ -191,6 +191,13 @@ if final_state:
     with tab_blog:
         blog_pieces = [p for p in approved if p["channel"] == "blog"]
         if blog_pieces:
+            health = publisher_client.check_health()
+            calendar = final_state.get("content_calendar", [])
+            week_by_topic = {
+                e.get("topic"): e.get("week", 1)
+                for e in calendar
+                if e.get("channel") == "blog"
+            }
             for i, p in enumerate(blog_pieces):
                 with st.expander(p["topic"], expanded=True):
                     col1, col2 = st.columns([4, 1])
@@ -204,52 +211,27 @@ if final_state:
                             file_name=f"blog_{p['topic'][:30]}.md",
                             key=f"dl_blog_{i}",
                         )
-
-            # ── Publish to Storyblok (isolated extension, outside the graph) ──
-            st.divider()
-            st.markdown("#### 📤 Publish to Storyblok")
-            health = publisher_client.check_health()
-            if not health:
-                st.caption(
-                    "⚠️ Publishing service unreachable. Start it with "
-                    "`uvicorn backend.api.main:app --port 8000` and set "
-                    "`PUBLISHER_API_URL` / `PUBLISHER_API_KEY`."
-                )
-            elif not health.get("storyblok_configured"):
-                st.caption(
-                    "⚠️ Storyblok not configured on the publishing service "
-                    "(set `STORYBLOK_MANAGEMENT_TOKEN` and `STORYBLOK_SPACE_ID`)."
-                )
-            else:
-                calendar = final_state.get("content_calendar", [])
-                week_by_topic = {
-                    e.get("topic"): e.get("week", 1)
-                    for e in calendar
-                    if e.get("channel") == "blog"
-                }
-                if st.button(
-                    "📤 Publish all blogs to Storyblok (draft)",
-                    key="publish_sb_all",
-                    use_container_width=True,
-                ):
-                    payload = [
-                        {
-                            "topic": p["topic"],
-                            "draft": p["draft"],
-                            "week": week_by_topic.get(p["topic"], idx + 1),
-                        }
-                        for idx, p in enumerate(blog_pieces)
-                    ]
-                    with st.spinner("Publishing to Storyblok..."):
-                        try:
-                            resp = publisher_client.publish_blogs(payload, publish=False)
-                            st.session_state["storyblok_results"] = resp.get("results", [])
-                        except RuntimeError as e:
-                            st.error(str(e))
-
-                results = st.session_state.get("storyblok_results")
-                if results:
-                    st.dataframe(pd.DataFrame(results), use_container_width=True)
+                        if health and health.get("storyblok_configured"):
+                            if st.button("📤 Publish", key=f"publish_sb_{i}", use_container_width=True):
+                                week = week_by_topic.get(p["topic"], i + 1)
+                                with st.spinner("Publishing..."):
+                                    try:
+                                        resp = publisher_client.publish_blogs(
+                                            [{"topic": p["topic"], "draft": p["draft"], "week": week}],
+                                            publish=False,
+                                        )
+                                        st.session_state[f"storyblok_result_{i}"] = resp.get("results", [])
+                                    except RuntimeError as e:
+                                        st.error(str(e))
+                            result = st.session_state.get(f"storyblok_result_{i}")
+                            if result:
+                                r = result[0]
+                                if r.get("status") == "error":
+                                    st.error(r.get("error") or "Publish failed")
+                                else:
+                                    st.success(f"✓ {r['status'].capitalize()}")
+                                    if r.get("url"):
+                                        st.link_button("Open in Storyblok", r["url"])
         else:
             st.info("Blog posts will appear here.")
 

@@ -54,12 +54,13 @@ def piece_to_story(
 ) -> StoryDraft:
     h1_title, body_md = split_h1(draft)
     name = (h1_title or topic or "Untitled").strip()
-    slug = f"week-{week}-{slugify(topic or name)}"
+    slug = slugify(name)
 
     bloks = markdown_to_text_bloks(body_md, schema)
     story: dict = {
         "name": name,
         "slug": slug,
+        "tag_list": ["blog", f"week{week}"],
         "content": {
             "component": schema.root_component,
             schema.body_field: bloks,

@@ -12,6 +12,7 @@ A **production-grade multi-agent AI system** that turns a single brand brief int
 6. Runs a QA agent that scores each piece and sends failed pieces back for revision (max 2 rounds)
 7. Publishes approved content to Notion and Buffer (falls back to local `./output/` files)
 8. Streams live progress to the Streamlit UI as each agent completes
+9. Publishes blog posts to **Storyblok** as draft stories via a dedicated FastAPI publishing service
 
 ## Tech stack
 
@@ -21,6 +22,8 @@ A **production-grade multi-agent AI system** that turns a single brand brief int
 - **Streamlit** — UI
 - **Serper API** — web search
 - **Notion API + Buffer API** — publishing
+- **Storyblok Management API** — blog publishing (via isolated FastAPI service)
+- **FastAPI + uvicorn** — internal publishing microservice (owns the Storyblok token, never exposed to Streamlit)
 - **Docker Compose** — local + deployment
 - **Railway / Streamlit Cloud** — cloud deployment
 
@@ -45,12 +48,18 @@ All agents read from and write to a single shared `ContentState` TypedDict (see 
 ```
 content-marketing-engine/
 ├── backend/
-│   ├── agents/        # trend_researcher, planner, writers, qa_agent, publisher
-│   ├── rag/           # ingest, retriever
-│   └── graph/         # state, builder
+│   ├── agents/          # trend_researcher, planner, writers, qa_agent, publisher
+│   ├── rag/             # ingest, retriever
+│   ├── graph/           # state, builder
+│   ├── api/             # FastAPI publishing service
+│   │   ├── main.py      #   endpoints: GET /health, POST /publish/storyblok
+│   │   └── models.py    #   Pydantic request/response models
+│   └── publishing/
+│       ├── publisher_client.py   # Streamlit → FastAPI HTTP client (no Storyblok token)
+│       └── storyblok/            # Storyblok logic: config, client, schema, mapper, service
 ├── app.py             # Streamlit entry point
 ├── brand_docs/        # Drop brand PDFs/TXTs/MDs here
-├── tests/             # test_graph.py
+├── tests/             # test_graph.py, test_storyblok_publishing.py
 ├── docker-compose.yml
 ├── Dockerfile
 ├── requirements.txt
@@ -88,7 +97,11 @@ pytest tests/ -v
 streamlit run app.py
 # Opens at http://localhost:8501
 
-# 9. For Docker (alternative to steps 4-8)
+# 9. (Optional) Start the Storyblok publishing service — needed for "Publish to Storyblok"
+uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
+# Health check: http://localhost:8000/health
+
+# 10. For Docker (alternative to steps 4-9 — starts Qdrant + app + publishing API together)
 docker compose up --build
 ```
 
@@ -106,9 +119,85 @@ docker compose up --build
 | `QDRANT_API_KEY` | for cloud | Only needed for Qdrant Cloud |
 | `NOTION_TOKEN`, `NOTION_DATABASE_ID` | optional | Publishing — app works without these |
 | `BUFFER_TOKEN`, `BUFFER_PROFILE_IDS` | optional | Publishing — app works without these |
+| `STORYBLOK_MANAGEMENT_TOKEN` | optional | Storyblok write token — **FastAPI service only**, never set in the Streamlit process |
+| `STORYBLOK_SPACE_ID` | optional | Target Storyblok space ID (FastAPI service) |
+| `STORYBLOK_REGION` | optional | Storyblok MAPI host: `eu` (default), `us`, `ap`, `ca`, `cn` |
+| `STORYBLOK_BLOG_PARENT_ID` | optional | Folder story ID to nest blog stories under |
+| `PUBLISHER_API_KEY` | optional | Shared secret between Streamlit and the FastAPI publisher (both processes must have it) |
+| `PUBLISHER_API_URL` | optional | FastAPI base URL seen by Streamlit — `http://localhost:8000` locally, `http://api:8000` in Docker Compose |
 | `LANGSMITH_API_KEY`, `LANGSMITH_TRACING`, `LANGCHAIN_PROJECT` | optional | LangSmith observability |
 
 If only one LLM key is set, the app uses whichever is available (no fallback). If publishing keys are absent, the publisher saves all content to `./output/` as Markdown.
+
+## Storyblok publishing service (FastAPI)
+
+Blog posts can be published directly to Storyblok as draft stories via the "Publish to Storyblok" button in the Blog tab. This feature runs as a **separate FastAPI microservice** — isolated from the LangGraph pipeline — for a security reason: the Storyblok Management token must never be loaded into the Streamlit process.
+
+```
+Streamlit UI
+  └─► publisher_client.py  (sends content + X-API-Key header; no Storyblok token)
+        └─► POST /publish/storyblok  (FastAPI on port 8000)
+              └─► Storyblok Management API  (token lives here only)
+```
+
+### How it works
+
+1. The FastAPI service discovers the Storyblok space's component schema at startup (no hardcoding).
+2. Each approved blog post is mapped to a `page` story containing `text` bloks (markdown → Storyblok rich-text format).
+3. Stories are created as **drafts** by default (`publish: false`); set `publish: true` in the request to go live immediately.
+4. Slugs are deterministic — re-running creates/updates the same story (idempotent).
+
+### Running the service locally
+
+```bash
+# In a second terminal (alongside streamlit run app.py)
+uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
+```
+
+Set these env vars before starting (in `.env` or your shell):
+
+```
+STORYBLOK_MANAGEMENT_TOKEN=sb_pat_...   # write-scoped token from Storyblok UI
+STORYBLOK_SPACE_ID=123456
+PUBLISHER_API_KEY=any-random-secret     # same value in both .env files / processes
+PUBLISHER_API_URL=http://localhost:8000 # Streamlit process only
+```
+
+### API endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/health` | none | Liveness check; returns `storyblok_configured` flag |
+| `POST` | `/publish/storyblok` | `X-API-Key` header | Publish blog pieces as Storyblok draft stories |
+
+**`POST /publish/storyblok` request body:**
+
+```json
+{
+  "pieces": [
+    { "topic": "AI in Marketing", "draft": "# Week 1\n...", "week": 1 }
+  ],
+  "publish": false
+}
+```
+
+**Response:**
+
+```json
+{
+  "results": [
+    {
+      "topic": "AI in Marketing",
+      "status": "created",
+      "story_id": 987654,
+      "url": "https://app.storyblok.com/...",
+      "full_slug": "ai-in-marketing-week-1"
+    }
+  ]
+}
+```
+
+Possible `status` values: `created`, `updated`, `error`.
 
 ## Deployment
 
@@ -135,8 +224,12 @@ ngrok http 8501                                    # Terminal 4
 ```bash
 docker compose up --build
 docker compose exec app python -m backend.rag.ingest --docs ./brand_docs/
-# App live at http://localhost:8501
+# Streamlit app:      http://localhost:8501
+# FastAPI publisher:  http://localhost:8000
+# Qdrant:             http://localhost:6333
 ```
+
+> In Docker Compose, set `PUBLISHER_API_URL=http://api:8000` (the internal service name) so Streamlit can reach the FastAPI container.
 
 ## Testing
 
