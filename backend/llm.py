@@ -17,7 +17,8 @@ import os
 from langchain_core.runnables import Runnable
 
 
-def get_llm(temperature: float = 0.7) -> Runnable:
+def _build_llms(temperature: float):
+    """Construct the (anthropic, openai_or_none) chat models from env."""
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
 
@@ -32,7 +33,7 @@ def get_llm(temperature: float = 0.7) -> Runnable:
     )
 
     if not openai_key:
-        return anthropic_llm
+        return anthropic_llm, None
 
     from langchain_openai import ChatOpenAI
     openai_llm = ChatOpenAI(
@@ -40,6 +41,27 @@ def get_llm(temperature: float = 0.7) -> Runnable:
         temperature=temperature,
         api_key=openai_key,
     )
+    return anthropic_llm, openai_llm
+
+
+def get_llm(temperature: float = 0.7) -> Runnable:
+    anthropic_llm, openai_llm = _build_llms(temperature)
+    if openai_llm is None:
+        return anthropic_llm
 
     # Any exception from OpenAI triggers transparent retry against Anthropic
     return openai_llm.with_fallbacks([anthropic_llm])
+
+
+def get_llm_with_tools(tools: list, temperature: float = 0.7) -> Runnable:
+    """Like get_llm(), but with the given tools bound for tool-calling.
+
+    Tools must be bound to each *underlying* LLM before wrapping in
+    with_fallbacks(), because RunnableWithFallbacks has no .bind_tools().
+    """
+    anthropic_llm, openai_llm = _build_llms(temperature)
+    anthropic_bound = anthropic_llm.bind_tools(tools)
+    if openai_llm is None:
+        return anthropic_bound
+
+    return openai_llm.bind_tools(tools).with_fallbacks([anthropic_bound])

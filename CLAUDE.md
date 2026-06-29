@@ -56,6 +56,8 @@ START → rag_retriever → trend_researcher → planner
 
 **Fan-out with `Send()`** — `fan_out_to_writers()` in `builder.py` creates one `Send()` per calendar entry, injecting `current_calendar_entry` into the state copy each writer receives. The revision fan-out (`route_after_qa`) does the same, additionally injecting `revision_target` and QA feedback into the writer's `current_calendar_entry.notes`.
 
+**Agentic tool-calling (`trend_researcher`)** — the trend researcher is a real tool-calling agent, not code-driven search. `backend/agents/tools.py` defines two LangChain `@tool`s — `web_search` (Serper `/search`) and `news_search` (Serper `/news`) — collected in `RESEARCH_TOOLS` / `TOOL_REGISTRY`. The node binds them via `get_llm_with_tools()` and runs a manual loop (`tool_llm.invoke → execute tool_calls → append ToolMessage → repeat`, capped at `MAX_TOOL_ITERS = 5`): **the LLM chooses the queries**. After the loop, a plain (un-bound) `get_llm()` call extracts the structured `trending_keywords` / `competitor_gaps` JSON. Output keys are unchanged, so `planner` and `ContentState` need no edits. `search_results` records the model-chosen queries for audit.
+
 **Shared state** — `ContentState` in `backend/graph/state.py` is the only thing passed between agents. Writers append to `content_pieces`; QA splits it into `approved_pieces` / `rejected_pieces` and clears `content_pieces` for the next round. `revision_round` is the loop counter (max 2, enforced in `route_after_qa`).
 
 **RAG** — `rag_retriever_node` queries Qdrant with a VoyageAI `voyage-3` embedding (1024 dims). The collection must exist before running the pipeline; run `backend.rag.ingest` first. If Qdrant is unreachable the node raises — there is no silent fallback.
@@ -68,7 +70,8 @@ START → rag_retriever → trend_researcher → planner
 
 | Path | Role |
 |---|---|
-| `backend/llm.py` | `get_llm(temperature)` factory — GPT-4o primary, Claude fallback via `with_fallbacks()` |
+| `backend/llm.py` | `get_llm(temperature)` factory — GPT-4o primary, Claude fallback via `with_fallbacks()`; `get_llm_with_tools(tools, temperature)` binds tools per-LLM before the fallback wrap |
+| `backend/agents/tools.py` | LangChain `@tool`s exposed to the LLM: `web_search` + `news_search` (both Serper), `RESEARCH_TOOLS` / `TOOL_REGISTRY` |
 | `backend/graph/state.py` | `ContentState` + `ContentPiece` TypedDicts |
 | `backend/graph/builder.py` | Graph topology, `route_after_qa`, `fan_out_to_writers`, `content_graph` |
 | `backend/rag/ingest.py` | One-shot CLI: load docs → chunk → embed → store in Qdrant |
@@ -88,7 +91,7 @@ START → rag_retriever → trend_researcher → planner
 | `ANTHROPIC_API_KEY` | Fallback LLM. Used automatically when OpenAI fails. |
 | `ANTHROPIC_MODEL` | Anthropic model name. Defaults to `claude-sonnet-4-6`. |
 | `VOYAGE_API_KEY` | RAG embeddings (`voyage-3`, voyageai.com) |
-| `SERPER_API_KEY` | Trend researcher web search (serper.dev) |
+| `SERPER_API_KEY` | Trend researcher `web_search` + `news_search` tools (serper.dev) |
 | `QDRANT_URL` | Defaults to `http://localhost:6333` |
 | `QDRANT_API_KEY` | Qdrant Cloud only |
 | `NOTION_TOKEN`, `NOTION_DATABASE_ID` | Publishing to Notion |
@@ -107,6 +110,7 @@ At least one of `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` must be set. Both is reco
 
 - **`from langgraph.constants import Send`** is deprecated as of LangGraph 1.0; the correct import is `from langgraph.types import Send`. Both `builder.py` and `tests/test_graph.py` still use the old path (works until LangGraph 2.0).
 - **LLM factory** (`backend/llm.py`) — `get_llm()` is called at module import in each agent (not lazily). Pytest therefore needs dummy env vars (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `SERPER_API_KEY`, `VOYAGE_API_KEY`) to collect tests; see the dummy-key command above. `with_fallbacks()` is only invoked at call time, not import time.
+- **Tool binding + fallbacks** — `get_llm_with_tools()` binds tools to each underlying LLM *before* `with_fallbacks()`, because `RunnableWithFallbacks` has **no `.bind_tools()`**. Don't try to call `.bind_tools()` on the result of `get_llm()`.
 - The Streamlit `asyncio.run(run_with_streaming())` pattern works for Streamlit ≥ 1.39 but will conflict if a running event loop already exists (e.g. inside Jupyter). Use the app via `streamlit run` only.
 - **Storyblok token rotation** — the `content-foundry-ui` repo's `.mcp.json` previously contained a literal `sb_pat_...` token; it has been replaced with `${STORYBLOK_MCP_TOKEN}` interpolation. The previously-committed token must be **rotated** in the Storyblok UI (treat as compromised). Use a *separate* write-scoped Management token for `STORYBLOK_MANAGEMENT_TOKEN` (the FastAPI service), distinct from the MCP dev token.
 - **Storyblok publishing tests** (`tests/test_storyblok_publishing.py`) mock httpx and do not import the graph, so they collect without LLM keys. The Storyblok modules read env lazily (`StoryblokConfig.from_env()`), so no dummy `STORYBLOK_*` keys are needed to import them.
