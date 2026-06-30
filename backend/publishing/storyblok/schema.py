@@ -31,22 +31,26 @@ class SchemaError(RuntimeError):
 
 @dataclass(frozen=True)
 class ResolvedSchema:
-    root_component: str       # e.g. "page"
-    body_field: str           # bloks field on the root, e.g. "body"
-    text_component: str       # e.g. "text"
-    text_field: str           # string field on text, e.g. "text"
-    tag_field: str            # option/text field for h1-h6/p, e.g. "tag"
-    align_field: str | None   # optional alignment field
+    root_component: str  # e.g. "page"
+    body_field: str  # bloks field on the root, e.g. "body"
+    text_component: str  # e.g. "text"
+    text_field: str  # string field on text, e.g. "text"
+    tag_field: str  # option/text field for h1-h6/p, e.g. "tag"
+    align_field: str | None  # optional alignment field
 
 
 def _index(components: list[dict]) -> dict[str, dict]:
     return {c.get("name", ""): (c.get("schema") or {}) for c in components}
 
 
-def _pick(schema: dict, candidates: tuple[str, ...], *, field_type: str | None = None) -> str | None:
+def _pick(
+    schema: dict, candidates: tuple[str, ...], *, field_type: str | None = None
+) -> str | None:
     for name in candidates:
         field = schema.get(name)
-        if field is not None and (field_type is None or field.get("type") == field_type):
+        if field is not None and (
+            field_type is None or field.get("type") == field_type
+        ):
             return name
     if field_type is not None:
         for name, field in schema.items():

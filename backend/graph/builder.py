@@ -4,7 +4,7 @@ Constructs and compiles the LangGraph StateGraph.
 """
 
 from langgraph.graph import StateGraph, START, END
-from langgraph.constants import Send
+from langgraph.types import Send
 
 from backend.graph.state import ContentState
 from backend.agents.trend_researcher import trend_researcher_node

@@ -22,10 +22,11 @@ def _build_llms(temperature: float):
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
 
-    openai_model    = os.environ.get("OPENAI_MODEL", "gpt-4o")
+    openai_model = os.environ.get("OPENAI_MODEL", "gpt-4o")
     anthropic_model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
     from langchain_anthropic import ChatAnthropic
+
     anthropic_llm = ChatAnthropic(
         model=anthropic_model,
         temperature=temperature,
@@ -36,6 +37,7 @@ def _build_llms(temperature: float):
         return anthropic_llm, None
 
     from langchain_openai import ChatOpenAI
+
     openai_llm = ChatOpenAI(
         model=openai_model,
         temperature=temperature,

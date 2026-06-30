@@ -1,4 +1,5 @@
 """tests/test_tools.py — agent tool-calling (web_search / news_search)."""
+
 from unittest.mock import patch, MagicMock
 
 
@@ -6,6 +7,7 @@ from unittest.mock import patch, MagicMock
 @patch("backend.agents.tools.GoogleSerperAPIWrapper")
 def test_web_search_returns_results(mock_wrapper):
     from backend.agents.tools import web_search
+
     mock_wrapper.return_value.run.return_value = "web results for x"
     assert web_search.invoke({"query": "x"}) == "web results for x"
     mock_wrapper.return_value.run.assert_called_once_with("x")
@@ -14,6 +16,7 @@ def test_web_search_returns_results(mock_wrapper):
 @patch("backend.agents.tools.GoogleSerperAPIWrapper")
 def test_news_search_uses_news_type(mock_wrapper):
     from backend.agents.tools import news_search
+
     mock_wrapper.return_value.run.return_value = "news results"
     assert news_search.invoke({"query": "y"}) == "news results"
     # news_search must construct the wrapper with type="news"
@@ -24,6 +27,7 @@ def test_news_search_uses_news_type(mock_wrapper):
 @patch("backend.agents.tools.GoogleSerperAPIWrapper")
 def test_web_search_swallows_errors(mock_wrapper):
     from backend.agents.tools import web_search
+
     mock_wrapper.return_value.run.side_effect = RuntimeError("boom")
     out = web_search.invoke({"query": "z"})
     assert "unavailable" in out.lower()
@@ -41,7 +45,9 @@ def test_trend_researcher_runs_tools_then_extracts(mock_tool_llm, mock_llm):
     from backend.agents.trend_researcher import trend_researcher_node
 
     # 1st invoke: model asks to call web_search. 2nd invoke: no tool calls → stop.
-    call_msg = MagicMock(tool_calls=[{"name": "web_search", "args": {"query": "q"}, "id": "1"}])
+    call_msg = MagicMock(
+        tool_calls=[{"name": "web_search", "args": {"query": "q"}, "id": "1"}]
+    )
     stop_msg = MagicMock(tool_calls=[])
     mock_tool_llm.invoke.side_effect = [call_msg, stop_msg]
 

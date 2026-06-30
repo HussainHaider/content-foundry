@@ -51,7 +51,7 @@ def markdown_to_text_bloks(md_text: str, schema: ResolvedSchema) -> list[dict]:
     md = MarkdownIt("commonmark")
     tokens = md.parse(md_text or "")
     bloks: list[dict] = []
-    list_stack: list[dict] = []   # {"ordered": bool, "counter": int}
+    list_stack: list[dict] = []  # {"ordered": bool, "counter": int}
     pending_prefix: str | None = None
 
     i, n = 0, len(tokens)

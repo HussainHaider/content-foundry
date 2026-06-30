@@ -83,7 +83,9 @@ def publish_blogs(
                 result["story_id"] = sid
                 result["full_slug"] = story_obj.get("full_slug") or draft.slug
                 result["url"] = config.editor_url(sid) if sid else None
-                logger.info("storyblok %s story %s (%s)", result["status"], sid, draft.slug)
+                logger.info(
+                    "storyblok %s story %s (%s)", result["status"], sid, draft.slug
+                )
             except Exception as exc:  # isolate per-piece failures
                 result["status"] = "error"
                 result["error"] = str(exc)

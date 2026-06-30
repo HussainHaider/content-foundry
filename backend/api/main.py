@@ -42,7 +42,9 @@ def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
     expected = os.environ.get("PUBLISHER_API_KEY", "").strip()
     if not expected:
         # Fail closed: publishing is disabled until an internal key is configured.
-        raise HTTPException(status_code=503, detail="Publishing API key not configured.")
+        raise HTTPException(
+            status_code=503, detail="Publishing API key not configured."
+        )
     if not x_api_key or x_api_key != expected:
         raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key.")
 

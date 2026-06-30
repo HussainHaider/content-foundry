@@ -74,10 +74,12 @@ Do NOT write generic corporate content. Be specific, useful, and opinionated."""
 
 def blog_writer_node(state: ContentState) -> dict:
     entry = state.get("current_calendar_entry", {})
-    response = llm.invoke([
-        SystemMessage(content=BLOG_SYSTEM),
-        HumanMessage(content=_build_context(state)),
-    ])
+    response = llm.invoke(
+        [
+            SystemMessage(content=BLOG_SYSTEM),
+            HumanMessage(content=_build_context(state)),
+        ]
+    )
     revision_count = state.get("revision_target", {}).get("revision_count", 0)
     piece: ContentPiece = {
         "channel": "blog",
@@ -116,10 +118,12 @@ Match the brand voice exactly. Write like a human, not a press release."""
 
 def social_writer_node(state: ContentState) -> dict:
     entry = state.get("current_calendar_entry", {})
-    response = llm.invoke([
-        SystemMessage(content=SOCIAL_SYSTEM),
-        HumanMessage(content=_build_context(state)),
-    ])
+    response = llm.invoke(
+        [
+            SystemMessage(content=SOCIAL_SYSTEM),
+            HumanMessage(content=_build_context(state)),
+        ]
+    )
     revision_count = state.get("revision_target", {}).get("revision_count", 0)
     piece: ContentPiece = {
         "channel": "social",
@@ -156,10 +160,12 @@ Rules:
 
 def email_writer_node(state: ContentState) -> dict:
     entry = state.get("current_calendar_entry", {})
-    response = llm.invoke([
-        SystemMessage(content=EMAIL_SYSTEM),
-        HumanMessage(content=_build_context(state)),
-    ])
+    response = llm.invoke(
+        [
+            SystemMessage(content=EMAIL_SYSTEM),
+            HumanMessage(content=_build_context(state)),
+        ]
+    )
     revision_count = state.get("revision_target", {}).get("revision_count", 0)
     piece: ContentPiece = {
         "channel": "email",
@@ -203,10 +209,12 @@ No misleading claims."""
 
 def ad_copy_writer_node(state: ContentState) -> dict:
     entry = state.get("current_calendar_entry", {})
-    response = llm.invoke([
-        SystemMessage(content=AD_SYSTEM),
-        HumanMessage(content=_build_context(state)),
-    ])
+    response = llm.invoke(
+        [
+            SystemMessage(content=AD_SYSTEM),
+            HumanMessage(content=_build_context(state)),
+        ]
+    )
     revision_count = state.get("revision_target", {}).get("revision_count", 0)
     piece: ContentPiece = {
         "channel": "ad",

@@ -52,9 +52,10 @@ Rules:
 
 
 def planner_node(state: ContentState) -> dict:
-    response = llm.invoke([
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=f"""
+    response = llm.invoke(
+        [
+            SystemMessage(content=SYSTEM_PROMPT),
+            HumanMessage(content=f"""
 Brand: {state['brand_name']}
 Audience: {state['target_audience']}
 Brief: {state['brief']}
@@ -68,23 +69,26 @@ Brand voice context (from style guide):
 
 Build the 4-week calendar. Return JSON only.
 """),
-    ])
+        ]
+    )
 
     try:
         parsed = json.loads(response.content)
     except json.JSONDecodeError:
-        match = re.search(r'\{.*\}', response.content, re.DOTALL)
-        parsed = json.loads(match.group()) if match else {
-            "monthly_themes": [], "content_calendar": []
-        }
+        match = re.search(r"\{.*\}", response.content, re.DOTALL)
+        parsed = (
+            json.loads(match.group())
+            if match
+            else {"monthly_themes": [], "content_calendar": []}
+        )
 
     return {
-        "monthly_themes":    parsed.get("monthly_themes", []),
-        "content_calendar":  parsed.get("content_calendar", []),
-        "revision_round":    0,
-        "content_pieces":    [],
-        "approved_pieces":   [],
-        "rejected_pieces":   [],
-        "qa_feedback":       {},
-        "published_urls":    {},
+        "monthly_themes": parsed.get("monthly_themes", []),
+        "content_calendar": parsed.get("content_calendar", []),
+        "revision_round": 0,
+        "content_pieces": [],
+        "approved_pieces": [],
+        "rejected_pieces": [],
+        "qa_feedback": {},
+        "published_urls": {},
     }

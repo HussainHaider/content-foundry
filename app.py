@@ -22,7 +22,9 @@ st.set_page_config(
 )
 
 st.title("📣 AI Content Marketing Engine")
-st.caption("Multi-agent LangGraph system — generates a full month of content from a single brief")
+st.caption(
+    "Multi-agent LangGraph system — generates a full month of content from a single brief"
+)
 
 # ── Sidebar: User inputs ─────────────────────────────────────────────────────
 with st.sidebar:
@@ -30,13 +32,12 @@ with st.sidebar:
 
     brand_name = st.text_input("Brand name", placeholder="e.g. WriteAI")
     target_audience = st.text_input(
-        "Target audience",
-        placeholder="e.g. B2B SaaS content marketers"
+        "Target audience", placeholder="e.g. B2B SaaS content marketers"
     )
     brief = st.text_area(
         "Campaign brief",
         height=140,
-        placeholder="Describe what you're launching, your goals, competitors, and any focus areas..."
+        placeholder="Describe what you're launching, your goals, competitors, and any focus areas...",
     )
     channels = st.multiselect(
         "Content channels",
@@ -59,6 +60,7 @@ with st.sidebar:
         if st.button("Ingest brand docs into RAG"):
             with st.spinner("Indexing documents..."):
                 from backend.rag.ingest import ingest
+
                 try:
                     n = ingest("./brand_docs/")
                     st.success(f"✅ Indexed {n} chunks")
@@ -106,9 +108,9 @@ if run_btn:
 
     # ── Live progress section ────────────────────────────────────────────────
     st.subheader("⚡ Agent progress")
-    progress_bar  = st.progress(0.0)
-    status_text   = st.empty()
-    agent_log     = st.empty()
+    progress_bar = st.progress(0.0)
+    status_text = st.empty()
+    agent_log = st.empty()
 
     NODE_WEIGHTS = {
         "rag_retriever": 0.10,
@@ -124,15 +126,15 @@ if run_btn:
     log_lines = []
 
     AGENT_LABELS = {
-        "rag_retriever":    "🔍 RAG Retriever — fetching brand context",
+        "rag_retriever": "🔍 RAG Retriever — fetching brand context",
         "trend_researcher": "📊 Trend Researcher — searching web for keywords",
-        "planner":          "📅 Planner — building content calendar",
-        "blog_writer":      "✍️  Blog Writer — drafting blog post",
-        "social_writer":    "📱 Social Writer — drafting social copy",
-        "email_writer":     "📧 Email Writer — drafting newsletter",
-        "ad_writer":        "🎯 Ad Writer — drafting ad copy",
-        "qa":               "🔎 QA Agent — scoring brand voice & SEO",
-        "publisher":        "📤 Publisher — pushing to Notion & Buffer",
+        "planner": "📅 Planner — building content calendar",
+        "blog_writer": "✍️  Blog Writer — drafting blog post",
+        "social_writer": "📱 Social Writer — drafting social copy",
+        "email_writer": "📧 Email Writer — drafting newsletter",
+        "ad_writer": "🎯 Ad Writer — drafting ad copy",
+        "qa": "🔎 QA Agent — scoring brand voice & SEO",
+        "publisher": "📤 Publisher — pushing to Notion & Buffer",
     }
 
     async def run_with_streaming():
@@ -171,9 +173,9 @@ if final_state:
     st.divider()
     st.subheader("📦 Generated content")
 
-    tab_cal, tab_blog, tab_social, tab_email, tab_ad, tab_meta = st.tabs([
-        "📅 Calendar", "📝 Blog", "📱 Social", "📧 Email", "🎯 Ads", "ℹ️ Meta"
-    ])
+    tab_cal, tab_blog, tab_social, tab_email, tab_ad, tab_meta = st.tabs(
+        ["📅 Calendar", "📝 Blog", "📱 Social", "📧 Email", "🎯 Ads", "ℹ️ Meta"]
+    )
 
     approved = final_state.get("approved_pieces", [])
 
@@ -212,15 +214,27 @@ if final_state:
                             key=f"dl_blog_{i}",
                         )
                         if health and health.get("storyblok_configured"):
-                            if st.button("📤 Publish", key=f"publish_sb_{i}", use_container_width=True):
+                            if st.button(
+                                "📤 Publish",
+                                key=f"publish_sb_{i}",
+                                use_container_width=True,
+                            ):
                                 week = week_by_topic.get(p["topic"], i + 1)
                                 with st.spinner("Publishing..."):
                                     try:
                                         resp = publisher_client.publish_blogs(
-                                            [{"topic": p["topic"], "draft": p["draft"], "week": week}],
+                                            [
+                                                {
+                                                    "topic": p["topic"],
+                                                    "draft": p["draft"],
+                                                    "week": week,
+                                                }
+                                            ],
                                             publish=False,
                                         )
-                                        st.session_state[f"storyblok_result_{i}"] = resp.get("results", [])
+                                        st.session_state[f"storyblok_result_{i}"] = (
+                                            resp.get("results", [])
+                                        )
                                     except RuntimeError as e:
                                         st.error(str(e))
                             result = st.session_state.get(f"storyblok_result_{i}")
@@ -240,8 +254,19 @@ if final_state:
         if social_pieces:
             for i, p in enumerate(social_pieces):
                 with st.expander(p["topic"], expanded=True):
-                    st.text_area("Copy", p["draft"], height=300, label_visibility="collapsed", key=f"ta_social_{i}")
-                    st.download_button("⬇️ Download", p["draft"], f"social_{p['topic'][:30]}.txt", key=f"dl_social_{i}")
+                    st.text_area(
+                        "Copy",
+                        p["draft"],
+                        height=300,
+                        label_visibility="collapsed",
+                        key=f"ta_social_{i}",
+                    )
+                    st.download_button(
+                        "⬇️ Download",
+                        p["draft"],
+                        f"social_{p['topic'][:30]}.txt",
+                        key=f"dl_social_{i}",
+                    )
         else:
             st.info("Social copy will appear here.")
 
@@ -250,8 +275,19 @@ if final_state:
         if email_pieces:
             for i, p in enumerate(email_pieces):
                 with st.expander(p["topic"], expanded=True):
-                    st.text_area("Email", p["draft"], height=300, label_visibility="collapsed", key=f"ta_email_{i}")
-                    st.download_button("⬇️ Download", p["draft"], f"email_{p['topic'][:30]}.txt", key=f"dl_email_{i}")
+                    st.text_area(
+                        "Email",
+                        p["draft"],
+                        height=300,
+                        label_visibility="collapsed",
+                        key=f"ta_email_{i}",
+                    )
+                    st.download_button(
+                        "⬇️ Download",
+                        p["draft"],
+                        f"email_{p['topic'][:30]}.txt",
+                        key=f"dl_email_{i}",
+                    )
         else:
             st.info("Email newsletters will appear here.")
 
@@ -260,8 +296,19 @@ if final_state:
         if ad_pieces:
             for i, p in enumerate(ad_pieces):
                 with st.expander(p["topic"], expanded=True):
-                    st.text_area("Ad copy", p["draft"], height=300, label_visibility="collapsed", key=f"ta_ad_{i}")
-                    st.download_button("⬇️ Download", p["draft"], f"ad_{p['topic'][:30]}.txt", key=f"dl_ad_{i}")
+                    st.text_area(
+                        "Ad copy",
+                        p["draft"],
+                        height=300,
+                        label_visibility="collapsed",
+                        key=f"ta_ad_{i}",
+                    )
+                    st.download_button(
+                        "⬇️ Download",
+                        p["draft"],
+                        f"ad_{p['topic'][:30]}.txt",
+                        key=f"dl_ad_{i}",
+                    )
         else:
             st.info("Ad copy will appear here.")
 
