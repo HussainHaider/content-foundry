@@ -1,8 +1,10 @@
 """tests/test_graph.py"""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from backend.graph.builder import route_after_qa, fan_out_to_writers
+
+from backend.graph.builder import fan_out_to_writers, route_after_qa
 from backend.graph.state import ContentState
 
 
@@ -77,6 +79,7 @@ def test_route_after_qa_with_rejections(base_state):
         "draft": "",
         "seo_score": 0.5,
         "qa_passed": False,
+        "qa_feedback": "fix the intro",
         "revision_count": 0,
         "published_url": None,
     }
@@ -86,12 +89,66 @@ def test_route_after_qa_with_rejections(base_state):
     assert any(isinstance(r, Send) for r in result)
 
 
+def test_route_after_qa_feedback_does_not_collide(base_state):
+    """Two rejected pieces on the SAME channel must each receive their own
+    feedback — the regression this guards against was feedback keyed by channel."""
+    from langgraph.types import Send
+
+    rejected = [
+        {
+            "channel": "blog",
+            "topic": "Week 1 blog",
+            "draft": "",
+            "seo_score": 0.5,
+            "qa_passed": False,
+            "qa_feedback": "FEEDBACK_ONE",
+            "revision_count": 0,
+            "published_url": None,
+        },
+        {
+            "channel": "blog",
+            "topic": "Week 2 blog",
+            "draft": "",
+            "seo_score": 0.4,
+            "qa_passed": False,
+            "qa_feedback": "FEEDBACK_TWO",
+            "revision_count": 0,
+            "published_url": None,
+        },
+    ]
+    state = {**base_state, "rejected_pieces": rejected, "revision_round": 0}
+    result = route_after_qa(state)
+
+    sends = [r for r in result if isinstance(r, Send)]
+    assert len(sends) == 2
+    notes_by_topic = {
+        s.arg["current_calendar_entry"]["topic"]: s.arg["current_calendar_entry"]["notes"]
+        for s in sends
+    }
+    assert "FEEDBACK_ONE" in notes_by_topic["Week 1 blog"]
+    assert "FEEDBACK_TWO" in notes_by_topic["Week 2 blog"]
+
+
 def test_fan_out_creates_one_send_per_entry(base_state):
     from langgraph.types import Send
 
     result = fan_out_to_writers(base_state)
     assert len(result) == len(base_state["content_calendar"])
     assert all(isinstance(r, Send) for r in result)
+
+
+def test_graph_compiles_with_checkpointer():
+    """The shipped graph must carry a checkpointer so runs are resumable."""
+    from backend.graph.builder import content_graph
+
+    assert content_graph.checkpointer is not None
+
+
+def test_build_graph_without_checkpointer():
+    from backend.graph.builder import build_graph
+
+    graph = build_graph(checkpointer=None)
+    assert graph.checkpointer is None
 
 
 @patch("backend.agents.writers.llm")

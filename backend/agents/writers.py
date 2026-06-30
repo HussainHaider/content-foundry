@@ -17,9 +17,9 @@ Nodes:
   ad_copy_writer_node   → Google Search ads + Meta ads
 """
 
-import os
-from langchain_core.messages import SystemMessage, HumanMessage
-from backend.graph.state import ContentState, ContentPiece
+from langchain_core.messages import HumanMessage, SystemMessage
+
+from backend.graph.state import ContentPiece, ContentState
 from backend.llm import get_llm
 
 llm = get_llm(temperature=0.7)
@@ -29,8 +29,9 @@ def _build_context(state: ContentState) -> str:
     """Shared context string injected into every writer prompt."""
     entry = state.get("current_calendar_entry", {})
     revision = state.get("revision_target", {})
-    feedback = state.get("qa_feedback", {})
-    channel = entry.get("channel", "")
+    # Feedback is carried on the rejected piece itself (revision_target), keyed
+    # per-piece — not by channel — so multi-week revisions don't cross wires.
+    revision_feedback = revision.get("qa_feedback", "") if revision else ""
 
     base = f"""
 Brand: {state['brand_name']}
@@ -43,11 +44,11 @@ Strategic notes: {entry.get('notes', '')}
 Brand voice & style guide:
 {state['brand_context'][:1200]}
 """
-    if revision and feedback.get(channel):
+    if revision and revision_feedback:
         base += f"""
 IMPORTANT — THIS IS A REVISION:
 Previous draft was rejected by QA. Fix these specific issues:
-{feedback[channel]}
+{revision_feedback}
 
 Do NOT repeat the same mistakes. Address every issue listed above.
 """
@@ -87,6 +88,7 @@ def blog_writer_node(state: ContentState) -> dict:
         "draft": response.content,
         "seo_score": 0.0,
         "qa_passed": False,
+        "qa_feedback": "",
         "revision_count": revision_count,
         "published_url": None,
     }
@@ -131,6 +133,7 @@ def social_writer_node(state: ContentState) -> dict:
         "draft": response.content,
         "seo_score": 0.0,
         "qa_passed": False,
+        "qa_feedback": "",
         "revision_count": revision_count,
         "published_url": None,
     }
@@ -173,6 +176,7 @@ def email_writer_node(state: ContentState) -> dict:
         "draft": response.content,
         "seo_score": 0.0,
         "qa_passed": False,
+        "qa_feedback": "",
         "revision_count": revision_count,
         "published_url": None,
     }
@@ -222,6 +226,7 @@ def ad_copy_writer_node(state: ContentState) -> dict:
         "draft": response.content,
         "seo_score": 0.0,
         "qa_passed": False,
+        "qa_feedback": "",
         "revision_count": revision_count,
         "published_url": None,
     }

@@ -13,9 +13,11 @@ structured insights (top keywords + competitor content gaps) as JSON.
 
 import json
 import re
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
-from backend.graph.state import ContentState
+
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+
 from backend.agents.tools import RESEARCH_TOOLS, TOOL_REGISTRY
+from backend.graph.state import ContentState
 from backend.llm import get_llm, get_llm_with_tools
 
 # LLM with the research tools bound (model drives the searches)

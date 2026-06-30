@@ -68,11 +68,11 @@ def publish_storyblok(request: PublishRequest) -> PublishResponse:
         results = publish_blogs(pieces, publish=request.publish)
     except RuntimeError as exc:  # not configured
         logger.warning("publish rejected: %s", exc)
-        raise HTTPException(status_code=503, detail=str(exc))
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except SchemaError as exc:  # space contract mismatch
         logger.warning("publish schema error: %s", exc)
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except StoryblokError as exc:  # upstream Management API failure
         logger.error("storyblok upstream error: %s", exc)
-        raise HTTPException(status_code=502, detail=str(exc))
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     return PublishResponse(results=results)

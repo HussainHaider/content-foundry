@@ -3,22 +3,23 @@ backend/graph/builder.py
 Constructs and compiles the LangGraph StateGraph.
 """
 
-from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
-from backend.graph.state import ContentState
-from backend.agents.trend_researcher import trend_researcher_node
 from backend.agents.planner import planner_node
-from backend.agents.writers import (
-    blog_writer_node,
-    social_writer_node,
-    email_writer_node,
-    ad_copy_writer_node,
-)
-from backend.agents.qa_agent import qa_node
 from backend.agents.publisher import publisher_node
+from backend.agents.qa_agent import qa_node
+from backend.agents.trend_researcher import trend_researcher_node
+from backend.agents.writers import (
+    ad_copy_writer_node,
+    blog_writer_node,
+    email_writer_node,
+    social_writer_node,
+)
+from backend.graph.state import ContentState
 from backend.rag.retriever import rag_retriever_node
-
 
 MAX_REVISIONS = 2
 
@@ -45,6 +46,9 @@ def route_after_qa(state: ContentState) -> list[Send] | str:
     sends = []
     for piece in rejected:
         node_name = f"{piece['channel']}_writer"
+        # Feedback is read from the piece itself (authoritative, per-piece) so a
+        # channel with multiple rejected pieces gets the right notes for each.
+        feedback = piece.get("qa_feedback", "")
         sends.append(Send(node_name, {
             **state,
             "revision_target": piece,
@@ -54,7 +58,7 @@ def route_after_qa(state: ContentState) -> list[Send] | str:
                 "topic": piece["topic"],
                 "keywords": [],
                 "cta": "",
-                "notes": f"REVISION NEEDED: {state['qa_feedback'].get(piece['channel'], '')}"
+                "notes": f"REVISION NEEDED: {feedback}"
             }
         }))
     return sends
@@ -81,7 +85,15 @@ def fan_out_to_writers(state: ContentState) -> list[Send]:
     return sends
 
 
-def build_graph() -> StateGraph:
+def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> StateGraph:
+    """Build and compile the content pipeline.
+
+    A ``checkpointer`` persists state after every node, which makes runs
+    resumable and enables future human-in-the-loop interrupts. Callers that
+    pass a checkpointer MUST invoke the graph with a
+    ``config={"configurable": {"thread_id": ...}}``. Swap ``MemorySaver`` for a
+    ``SqliteSaver``/``PostgresSaver`` to persist across process restarts.
+    """
     graph = StateGraph(ContentState)
 
     # Register all nodes
@@ -120,8 +132,10 @@ def build_graph() -> StateGraph:
 
     graph.add_edge("publisher", END)
 
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)
 
 
-# Compile once at import time — reused across all requests
-content_graph = build_graph()
+# Compile once at import time — reused across all requests.
+# MemorySaver keeps run state in-process (resumable within a session). For
+# durability across restarts, swap in a SqliteSaver/PostgresSaver here.
+content_graph = build_graph(checkpointer=MemorySaver())

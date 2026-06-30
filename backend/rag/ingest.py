@@ -8,16 +8,17 @@ Loads all PDF, TXT, MD files from the given folder.
 Chunks them with overlap and stores embeddings in Qdrant.
 """
 
-import os
 import argparse
+import os
+
 from langchain_community.document_loaders import (
     DirectoryLoader,
-    TextLoader,
     PyPDFLoader,
+    TextLoader,
 )
+from langchain_qdrant import QdrantVectorStore
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_voyageai import VoyageAIEmbeddings
-from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
 
@@ -26,8 +27,15 @@ CHUNK_SIZE = 800
 CHUNK_OVERLAP = 120
 
 
-def ingest(docs_path: str) -> int:
-    """Returns number of chunks ingested."""
+def ingest(docs_path: str, reset: bool = False) -> int:
+    """Load, chunk, embed and store brand docs in Qdrant.
+
+    By default this is *additive*: the collection is created once if missing and
+    new chunks are appended on each run. Pass ``reset=True`` to drop and recreate
+    the collection first (destructive — wipes previously ingested docs).
+
+    Returns the number of chunks ingested in this call.
+    """
     docs = []
     for ext, loader_cls, loader_kwargs in (
         ("**/*.md", TextLoader, {"encoding": "utf-8"}),
@@ -64,10 +72,15 @@ def ingest(docs_path: str) -> int:
     client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
 
     try:
-        client.recreate_collection(
-            collection_name=COLLECTION_NAME,
-            vectors_config=VectorParams(size=1024, distance=Distance.COSINE),
-        )
+        if reset and client.collection_exists(COLLECTION_NAME):
+            client.delete_collection(COLLECTION_NAME)
+        # Create the collection only if it doesn't already exist, so repeat
+        # ingests append instead of wiping previously ingested documents.
+        if not client.collection_exists(COLLECTION_NAME):
+            client.create_collection(
+                collection_name=COLLECTION_NAME,
+                vectors_config=VectorParams(size=1024, distance=Distance.COSINE),
+            )
     except Exception as e:
         status = getattr(getattr(e, "status_code", None), "__int__", lambda: None)()
         if "403" in str(e) or status == 403:
@@ -94,6 +107,11 @@ def ingest(docs_path: str) -> int:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--docs", default="./brand_docs/")
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Drop and recreate the collection before ingesting (destructive).",
+    )
     args = parser.parse_args()
-    n = ingest(args.docs)
+    n = ingest(args.docs, reset=args.reset)
     print(f"✅ Ingested {n} chunks into Qdrant")

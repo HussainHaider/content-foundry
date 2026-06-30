@@ -6,9 +6,11 @@ Result stored in state['brand_context'] and shared with ALL downstream agents.
 """
 
 import os
-from langchain_voyageai import VoyageAIEmbeddings
+
 from langchain_qdrant import QdrantVectorStore
+from langchain_voyageai import VoyageAIEmbeddings
 from qdrant_client import QdrantClient
+
 from backend.graph.state import ContentState
 
 COLLECTION_NAME = "brand_content"

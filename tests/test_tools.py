@@ -1,6 +1,6 @@
 """tests/test_tools.py — agent tool-calling (web_search / news_search)."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 
 # ── Tool unit tests ─────────────────────────────────────────────────
