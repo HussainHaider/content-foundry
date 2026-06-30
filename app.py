@@ -226,53 +226,63 @@ if run_btn:
         st.session_state.pop("hitl_phase", None)
 
 # ── Plan approval gate (renders while a HITL run is paused) ───────────────────
-# Two sub-phases keep the resume idempotent against repeated/rapid clicks:
-#   awaiting_approval → render the editable plan + buttons (the ONLY place the
-#                       Approve button exists). A click just captures the edits
-#                       and flips to "generating"; double-clicks are harmless
-#                       because they set the same flag.
-#   generating        → no buttons rendered, so nothing can re-trigger a resume.
-#                       The graph is resumed exactly once, additionally guarded
-#                       by get_state().next so a stray rerun can't resume twice.
+# The entire gate lives inside ONE st.empty() placeholder so it can be wiped the
+# instant the user approves/cancels. Without this, the Approve/Cancel buttons
+# linger as clickable "ghost" widgets during the long generating run (Streamlit
+# keeps previously-rendered widgets at the same layout slot until the run that
+# replaces them finishes) — and a click on a ghost button interrupts the in-
+# flight run and re-enters the writers.
+#   awaiting_approval → render the editable plan + buttons (the ONLY place they
+#                       exist). A click captures the edits, wipes the gate, and
+#                       flips to "generating".
+#   generating        → gate emptied first → no clickable buttons during the run.
+#                       Resume happens once, also guarded by get_state().next.
 hitl_phase = st.session_state.get("hitl_phase")
 
+if hitl_phase in ("awaiting_approval", "generating"):
+    gate = st.empty()
+
 if hitl_phase == "awaiting_approval":
-    st.subheader("📋 Review the content plan")
-    st.caption(
-        "Edit topics, CTAs, keywords, or notes below, then approve to generate. "
-        "No drafts have been written yet — nothing is wasted if you change the plan."
-    )
+    with gate.container():
+        st.subheader("📋 Review the content plan")
+        st.caption(
+            "Edit topics, CTAs, keywords, or notes below, then approve to "
+            "generate. No drafts have been written yet — nothing is wasted if "
+            "you change the plan."
+        )
 
-    themes = st.session_state.get("hitl_themes", [])
-    if themes:
-        st.write("**Monthly themes:**", " · ".join(themes))
+        themes = st.session_state.get("hitl_themes", [])
+        if themes:
+            st.write("**Monthly themes:**", " · ".join(themes))
 
-    calendar = st.session_state.get("hitl_calendar", [])
-    edited_df = st.data_editor(
-        pd.DataFrame(calendar),
-        use_container_width=True,
-        num_rows="dynamic",
-        key="plan_editor",
-    )
+        edited_df = st.data_editor(
+            pd.DataFrame(st.session_state.get("hitl_calendar", [])),
+            use_container_width=True,
+            num_rows="dynamic",
+            key="plan_editor",
+        )
 
-    col_approve, col_cancel, _ = st.columns([2, 1, 4])
-    approve = col_approve.button(
-        "✅ Approve & generate", type="primary", use_container_width=True
-    )
-    cancel = col_cancel.button("✖ Cancel", use_container_width=True)
+        col_approve, col_cancel, _ = st.columns([2, 1, 4])
+        approve = col_approve.button(
+            "✅ Approve & generate", type="primary", use_container_width=True
+        )
+        cancel = col_cancel.button("✖ Cancel", use_container_width=True)
 
     if cancel:
+        gate.empty()  # remove the buttons immediately
         for key in ("hitl_phase", "hitl_calendar", "hitl_themes"):
             st.session_state.pop(key, None)
         st.rerun()
 
     if approve:
+        gate.empty()  # remove the buttons immediately
         # Capture edits now — the editor isn't rendered in the generating phase.
         st.session_state["hitl_edited_calendar"] = edited_df.to_dict("records")
         st.session_state["hitl_phase"] = "generating"
         st.rerun()
 
 elif hitl_phase == "generating":
+    gate.empty()  # wipe any lingering approval widgets before the long run
     graph = get_hitl_graph()
     config = {"configurable": {"thread_id": st.session_state["hitl_thread_id"]}}
 
