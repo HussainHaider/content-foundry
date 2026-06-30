@@ -137,11 +137,11 @@ def test_fan_out_creates_one_send_per_entry(base_state):
     assert all(isinstance(r, Send) for r in result)
 
 
-def test_graph_compiles_with_checkpointer():
-    """The shipped graph must carry a checkpointer so runs are resumable."""
+def test_default_graph_has_no_checkpointer():
+    """The shipped graph is checkpointer-less so importers/tests need no thread_id."""
     from backend.graph.builder import content_graph
 
-    assert content_graph.checkpointer is not None
+    assert content_graph.checkpointer is None
 
 
 def test_build_graph_without_checkpointer():
@@ -149,6 +149,16 @@ def test_build_graph_without_checkpointer():
 
     graph = build_graph(checkpointer=None)
     assert graph.checkpointer is None
+
+
+def test_build_graph_with_checkpointer_opt_in():
+    """Resumability is available on demand by passing a checkpointer."""
+    from langgraph.checkpoint.memory import MemorySaver
+
+    from backend.graph.builder import build_graph
+
+    graph = build_graph(checkpointer=MemorySaver())
+    assert graph.checkpointer is not None
 
 
 @patch("backend.agents.writers.llm")

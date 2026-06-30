@@ -4,7 +4,6 @@ Constructs and compiles the LangGraph StateGraph.
 """
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
@@ -88,11 +87,12 @@ def fan_out_to_writers(state: ContentState) -> list[Send]:
 def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> StateGraph:
     """Build and compile the content pipeline.
 
-    A ``checkpointer`` persists state after every node, which makes runs
-    resumable and enables future human-in-the-loop interrupts. Callers that
-    pass a checkpointer MUST invoke the graph with a
-    ``config={"configurable": {"thread_id": ...}}``. Swap ``MemorySaver`` for a
-    ``SqliteSaver``/``PostgresSaver`` to persist across process restarts.
+    By default the graph is compiled without a checkpointer. Pass one to make
+    runs resumable and to enable future human-in-the-loop interrupts — e.g.
+    ``build_graph(checkpointer=MemorySaver())`` (or a ``SqliteSaver`` /
+    ``PostgresSaver`` for durability across restarts). Callers that pass a
+    checkpointer MUST invoke the graph with a
+    ``config={"configurable": {"thread_id": ...}}``.
     """
     graph = StateGraph(ContentState)
 
@@ -136,6 +136,6 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> StateGraph:
 
 
 # Compile once at import time — reused across all requests.
-# MemorySaver keeps run state in-process (resumable within a session). For
-# durability across restarts, swap in a SqliteSaver/PostgresSaver here.
-content_graph = build_graph(checkpointer=MemorySaver())
+# Checkpointer-less by default so importers/tests don't need a thread_id.
+# Opt in to resumability by calling build_graph(checkpointer=MemorySaver()).
+content_graph = build_graph()

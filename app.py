@@ -4,7 +4,6 @@ Run with: streamlit run app.py
 """
 
 import asyncio
-import uuid
 from pathlib import Path
 
 import pandas as pd
@@ -139,16 +138,10 @@ if run_btn:
         "publisher": "📤 Publisher — pushing to Notion & Buffer",
     }
 
-    # The compiled graph has a checkpointer, so every run needs a thread_id.
-    # A fresh id per run keeps runs isolated; reuse one to resume a run.
-    run_config = {"configurable": {"thread_id": str(uuid.uuid4())}}
-
     async def run_with_streaming():
         _progress = 0.0
         collected = {}
-        async for event in content_graph.astream_events(
-            initial_state, config=run_config, version="v2"
-        ):
+        async for event in content_graph.astream_events(initial_state, version="v2"):
             kind = event.get("event", "")
             node = event.get("name", "")
 
