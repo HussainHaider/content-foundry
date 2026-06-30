@@ -226,7 +226,17 @@ if run_btn:
         st.session_state.pop("hitl_phase", None)
 
 # ── Plan approval gate (renders while a HITL run is paused) ───────────────────
-if st.session_state.get("hitl_phase") == "awaiting_approval":
+# Two sub-phases keep the resume idempotent against repeated/rapid clicks:
+#   awaiting_approval → render the editable plan + buttons (the ONLY place the
+#                       Approve button exists). A click just captures the edits
+#                       and flips to "generating"; double-clicks are harmless
+#                       because they set the same flag.
+#   generating        → no buttons rendered, so nothing can re-trigger a resume.
+#                       The graph is resumed exactly once, additionally guarded
+#                       by get_state().next so a stray rerun can't resume twice.
+hitl_phase = st.session_state.get("hitl_phase")
+
+if hitl_phase == "awaiting_approval":
     st.subheader("📋 Review the content plan")
     st.caption(
         "Edit topics, CTAs, keywords, or notes below, then approve to generate. "
@@ -252,20 +262,33 @@ if st.session_state.get("hitl_phase") == "awaiting_approval":
     cancel = col_cancel.button("✖ Cancel", use_container_width=True)
 
     if cancel:
-        st.session_state.pop("hitl_phase", None)
+        for key in ("hitl_phase", "hitl_calendar", "hitl_themes"):
+            st.session_state.pop(key, None)
         st.rerun()
 
     if approve:
-        graph = get_hitl_graph()
-        config = {"configurable": {"thread_id": st.session_state["hitl_thread_id"]}}
+        # Capture edits now — the editor isn't rendered in the generating phase.
+        st.session_state["hitl_edited_calendar"] = edited_df.to_dict("records")
+        st.session_state["hitl_phase"] = "generating"
+        st.rerun()
+
+elif hitl_phase == "generating":
+    graph = get_hitl_graph()
+    config = {"configurable": {"thread_id": st.session_state["hitl_thread_id"]}}
+
+    # Resume only if the thread is genuinely still paused at the interrupt; once
+    # it has moved past plan_review, .next is empty and we must not resume again.
+    if graph.get_state(config).next:
         decision = {
             "approved": True,
-            "content_calendar": edited_df.to_dict("records"),
+            "content_calendar": st.session_state.get("hitl_edited_calendar", []),
         }
         render_and_stream(graph, Command(resume=decision), config)
-        st.session_state["final_state"] = graph.get_state(config).values
-        st.session_state.pop("hitl_phase", None)
-        st.rerun()
+
+    st.session_state["final_state"] = graph.get_state(config).values
+    for key in ("hitl_phase", "hitl_edited_calendar", "hitl_calendar", "hitl_themes"):
+        st.session_state.pop(key, None)
+    st.rerun()
 
 # ── Results tabs (persist across reruns via session_state) ────────────────────
 final_state = st.session_state.get("final_state")

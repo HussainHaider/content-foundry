@@ -91,3 +91,26 @@ def test_resume_without_edits_keeps_original_calendar():
     snap = graph.get_state(config)
     assert not snap.next
     assert snap.values["content_calendar"] == CALENDAR
+
+
+def test_double_approve_is_idempotent_via_next_guard():
+    """The UI guards a second 'Approve' with `if graph.get_state(config).next`.
+    This proves that predicate: it's truthy while paused and falsy once resumed,
+    so a repeated approval is skipped instead of resuming the thread again."""
+    graph = _mini_graph()
+    config = {"configurable": {"thread_id": "double-approve"}}
+    graph.invoke(_base_state(require_approval=True), config)
+
+    edited = [{"week": 1, "channel": "blog", "topic": "EDITED", "keywords": [],
+               "cta": "", "notes": ""}]
+
+    # First approval: paused → the guard is truthy → resume happens.
+    assert graph.get_state(config).next
+    graph.invoke(
+        Command(resume={"approved": True, "content_calendar": edited}), config
+    )
+
+    # Second approval attempt: the guard is now falsy → the UI skips the resume,
+    # leaving the completed result untouched.
+    assert not graph.get_state(config).next
+    assert graph.get_state(config).values["content_calendar"] == edited
