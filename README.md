@@ -4,7 +4,7 @@ A **production-grade multi-agent AI system** that turns a single brand brief int
 
 ## Demo
 
-[![Watch the demo](https://cdn.loom.com/sessions/thumbnails/78e54629481a4c1e88f53b4dde1c4955-with-play.gif)](https://www.loom.com/share/78e54629481a4c1e88f53b4dde1c4955)
+[Watch the demo on Loom](https://www.loom.com/share/78e54629481a4c1e88f53b4dde1c4955)
 
 ## What it does
 
