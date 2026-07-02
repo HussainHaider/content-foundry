@@ -9,13 +9,17 @@ A **production-grade multi-agent AI system** that turns a single brand brief int
 ## What it does
 
 1. Takes a user's brand brief as input
-2. Researches trending topics via web search (Serper)
+2. Researches trending topics via web search (Serper) — outputs top 10 SEO keywords and 5 competitor content gaps
 3. Retrieves brand voice context from uploaded documents (RAG via Qdrant)
-4. Builds a 4-week content calendar
+4. Builds a 4-week content calendar with monthly themes
 5. *(Optional)* Pauses for **human approval** of the calendar — edit or approve it before any drafts are written
-6. Generates blog posts, social copy, email newsletters, and ad copy **in parallel**
-7. Runs a QA agent that scores each piece and sends failed pieces back for revision (max 2 rounds)
-8. Publishes approved content to Notion and Buffer (falls back to local `./output/` files)
+6. Generates all content **in parallel** across selected channels:
+   - **Blog** — 900–1200 word SEO post with H1/H2 structure and meta description
+   - **Social** — LinkedIn post + X/Twitter thread (4 tweets) + Instagram caption with hashtags
+   - **Email** — newsletter with Subject, Preview, Body, CTA button, and P.S. line
+   - **Ad copy** — Google Search Ads (headlines ≤30 chars, descriptions ≤90 chars) + Meta Ads (Facebook/Instagram) with two creative angles
+7. Runs a QA agent that scores each piece on 4 dimensions (brand voice, SEO, channel fit, quality) with a 0.75 pass threshold — failed pieces get specific, actionable feedback and are sent back for revision (max 2 rounds)
+8. Publishes approved content: Blog/Email/Ad → Notion, Social → Buffer (falls back to local `./output/` files if API keys are absent)
 9. Streams live progress to the Streamlit UI as each agent completes
 10. Publishes blog posts to **Storyblok** as draft stories via a dedicated FastAPI publishing service
 
@@ -23,10 +27,12 @@ A **production-grade multi-agent AI system** that turns a single brand brief int
 
 - **LangGraph** — multi-agent state machine (parallel `Send()` fan-out, conditional QA routing, cyclic re-write loop)
 - **OpenAI GPT-4o** (primary) + **Anthropic Claude `claude-sonnet-4-6`** (automatic fallback) — all agents use the same factory in `backend/llm.py`; if OpenAI hits a rate limit or outage, every call transparently retries against Claude
+- **VoyageAI** — `voyage-3` embeddings (1024 dims) for RAG
 - **Qdrant** — vector database for RAG
-- **Streamlit** — UI
-- **Serper API** — web search
-- **Notion API + Buffer API** — publishing
+- **Streamlit** — UI with live agent progress, tabbed results, file upload, and download buttons
+- **Serper API** — agentic web + news search (LLM picks the queries; capped at 5 tool iterations)
+- **Notion API** — publishing destination for blog, email, and ad content
+- **Buffer API** — social post scheduling
 - **Storyblok Management API** — blog publishing (via isolated FastAPI service)
 - **FastAPI + uvicorn** — internal publishing microservice (owns the Storyblok token, never exposed to Streamlit)
 - **Docker Compose** — local + deployment
@@ -37,13 +43,13 @@ A **production-grade multi-agent AI system** that turns a single brand brief int
 ```
 START
   → rag_retriever          (populates brand_context from Qdrant)
-  → trend_researcher       (web search → keywords + gaps)
-  → planner                (builds content calendar JSON)
+  → trend_researcher       (agentic web search → 10 keywords + 5 competitor gaps)
+  → planner                (builds content calendar JSON + monthly themes)
   → plan_review            (HITL gate: pauses for human approval iff require_approval)
   → [Send() fan-out]       (parallel: blog_writer, social_writer, email_writer, ad_writer)
-  → qa                     (scores all pieces, routes approved vs rejected)
-  → [conditional]          (if rejected & revision_round < 2 → fan back to writers)
-  → publisher              (pushes to Notion + Buffer)
+  → qa                     (scores all pieces on 4 criteria, threshold 0.75)
+  → [conditional]          (if rejected & revision_round < 2 → fan back to writers with feedback)
+  → publisher              (blog/email/ad → Notion, social → Buffer)
 END
 ```
 
@@ -59,12 +65,22 @@ unaffected and needs no checkpointer. Implemented with LangGraph's `interrupt()`
 
 All agents read from and write to a single shared `ContentState` TypedDict (see `backend/graph/state.py`).
 
+## Streamlit UI features
+
+- **Sidebar inputs** — brand name, target audience, campaign brief, channel selection (multiselect)
+- **Brand doc upload** — upload PDF/TXT/MD files directly in the sidebar and trigger RAG ingestion with one click (no CLI needed)
+- **Live progress bar** — streams `astream_events()` with per-node weights so progress updates as each agent finishes
+- **Tabbed results** — Calendar · Blog · Social · Email · Ads · Meta
+- **Download buttons** — every generated piece has a per-piece download button (`.md` for blog, `.txt` for others)
+- **Publish to Storyblok** — appears on each blog piece when the FastAPI service is running and configured
+- **Meta tab** — total pieces generated, revision rounds used, trending keywords found, RAG sources, published URLs
+
 ## Project structure
 
 ```
-content-marketing-engine/
+content-foundry/
 ├── backend/
-│   ├── agents/          # trend_researcher, planner, writers, qa_agent, publisher
+│   ├── agents/          # trend_researcher, planner, plan_review, writers, qa_agent, publisher
 │   ├── rag/             # ingest, retriever
 │   ├── graph/           # state, builder
 │   ├── api/             # FastAPI publishing service
@@ -75,7 +91,9 @@ content-marketing-engine/
 │       └── storyblok/            # Storyblok logic: config, client, schema, mapper, service
 ├── app.py             # Streamlit entry point
 ├── brand_docs/        # Drop brand PDFs/TXTs/MDs here
-├── tests/             # test_graph.py, test_storyblok_publishing.py
+├── docs/              # LangGraph agent graph image
+├── tests/             # test_graph, test_ingest, test_plan_review, test_qa_agent,
+│                      # test_storyblok_publishing, test_tools
 ├── docker-compose.yml
 ├── Dockerfile
 ├── requirements.txt
@@ -103,11 +121,13 @@ docker run -d -p 6333:6333 qdrant/qdrant
 # 5. Add brand documents to brand_docs/ folder
 # (PDF, TXT, or MD files — style guide, past content, tone guide)
 
-# 6. Ingest brand documents into Qdrant
+# 6. Ingest brand documents into Qdrant (additive by default — safe to re-run)
 python -m backend.rag.ingest --docs ./brand_docs/
+# Add --reset to wipe the collection and start fresh (destructive)
+python -m backend.rag.ingest --docs ./brand_docs/ --reset
 
 # 7. Run tests
-pytest tests/ -v
+OPENAI_API_KEY=dummy ANTHROPIC_API_KEY=dummy SERPER_API_KEY=dummy VOYAGE_API_KEY=dummy pytest tests/ -v
 
 # 8. Start the Streamlit app
 streamlit run app.py
@@ -119,6 +139,7 @@ uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
 
 # 10. For Docker (alternative to steps 4-9 — starts Qdrant + app + publishing API together)
 docker compose up --build
+docker compose exec app python -m backend.rag.ingest --docs ./brand_docs/
 ```
 
 ## Environment variables
@@ -133,8 +154,8 @@ docker compose up --build
 | `SERPER_API_KEY` | ✅ | Web search — free key at serper.dev (2500/month) |
 | `QDRANT_URL` | ✅ | `http://localhost:6333` locally; cluster URL for cloud |
 | `QDRANT_API_KEY` | for cloud | Only needed for Qdrant Cloud |
-| `NOTION_TOKEN`, `NOTION_DATABASE_ID` | optional | Publishing — app works without these |
-| `BUFFER_TOKEN`, `BUFFER_PROFILE_IDS` | optional | Publishing — app works without these |
+| `NOTION_TOKEN`, `NOTION_DATABASE_ID` | optional | Publishing blog/email/ad to Notion — app works without these |
+| `BUFFER_TOKEN`, `BUFFER_PROFILE_IDS` | optional | Scheduling social posts via Buffer — app works without these |
 | `STORYBLOK_MANAGEMENT_TOKEN` | optional | Storyblok write token — **FastAPI service only**, never set in the Streamlit process |
 | `STORYBLOK_SPACE_ID` | optional | Target Storyblok space ID (FastAPI service) |
 | `STORYBLOK_REGION` | optional | Storyblok MAPI host: `eu` (default), `us`, `ap`, `ca`, `cn` |
@@ -143,7 +164,7 @@ docker compose up --build
 | `PUBLISHER_API_URL` | optional | FastAPI base URL seen by Streamlit — `http://localhost:8000` locally, `http://api:8000` in Docker Compose |
 | `LANGSMITH_API_KEY`, `LANGSMITH_TRACING`, `LANGCHAIN_PROJECT` | optional | LangSmith observability |
 
-If only one LLM key is set, the app uses whichever is available (no fallback). If publishing keys are absent, the publisher saves all content to `./output/` as Markdown.
+At least one of `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` must be set. Both is recommended. If publishing keys are absent, the publisher saves all content to `./output/` as Markdown files.
 
 ## Storyblok publishing service (FastAPI)
 
@@ -250,7 +271,17 @@ docker compose exec app python -m backend.rag.ingest --docs ./brand_docs/
 ## Testing
 
 ```bash
-pytest tests/ -v
+# Dummy keys are needed because agents import the LLM factory at module load time
+OPENAI_API_KEY=dummy ANTHROPIC_API_KEY=dummy SERPER_API_KEY=dummy VOYAGE_API_KEY=dummy pytest tests/ -v
 ```
 
-The test suite covers the QA routing logic, the writer fan-out, and the blog writer node (with the LLM mocked).
+The test suite covers:
+
+| File | What it tests |
+|---|---|
+| `test_graph.py` | QA routing logic, writer fan-out, blog writer node (LLM mocked) |
+| `test_qa_agent.py` | QA agent scoring, approval/rejection, per-piece feedback keying |
+| `test_plan_review.py` | HITL interrupt/resume flow, pass-through when approval not required |
+| `test_ingest.py` | RAG ingest chunking, additive vs `--reset` behaviour |
+| `test_tools.py` | Serper web_search and news_search tool wrappers |
+| `test_storyblok_publishing.py` | Storyblok service (httpx mocked — no LLM keys needed) |
