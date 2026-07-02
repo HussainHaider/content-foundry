@@ -35,6 +35,9 @@ class ContentState(TypedDict):
     brand_name: str
     target_audience: str
     channels: list[Literal["blog", "social", "email", "ad"]]
+    # When True, the graph pauses after the planner for human plan approval
+    # (requires a checkpointed graph). When False, plan_review is a pass-through.
+    require_approval: bool
 
     # ── RAG output (set by rag_retriever node) ──────────────────────
     brand_context: str  # Concatenated brand doc chunks

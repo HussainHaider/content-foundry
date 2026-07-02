@@ -7,6 +7,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
+from backend.agents.plan_review import plan_review_node
 from backend.agents.planner import planner_node
 from backend.agents.publisher import publisher_node
 from backend.agents.qa_agent import qa_node
@@ -100,6 +101,7 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> StateGraph:
     graph.add_node("rag_retriever",    rag_retriever_node)
     graph.add_node("trend_researcher", trend_researcher_node)
     graph.add_node("planner",          planner_node)
+    graph.add_node("plan_review",      plan_review_node)
     graph.add_node("blog_writer",      blog_writer_node)
     graph.add_node("social_writer",    social_writer_node)
     graph.add_node("email_writer",     email_writer_node)
@@ -107,14 +109,17 @@ def build_graph(checkpointer: BaseCheckpointSaver | None = None) -> StateGraph:
     graph.add_node("qa",               qa_node)
     graph.add_node("publisher",        publisher_node)
 
-    # Linear edges: START → rag → trend → planner
+    # Linear edges: START → rag → trend → planner → plan_review
     graph.add_edge(START, "rag_retriever")
     graph.add_edge("rag_retriever", "trend_researcher")
     graph.add_edge("trend_researcher", "planner")
+    graph.add_edge("planner", "plan_review")
 
-    # Fan-out: planner → parallel writers via Send()
+    # Fan-out: plan_review → parallel writers via Send().
+    # plan_review optionally pauses here for human approval before the
+    # (expensive) writer fan-out runs.
     graph.add_conditional_edges(
-        "planner",
+        "plan_review",
         fan_out_to_writers,
         ["blog_writer", "social_writer", "email_writer", "ad_writer"],
     )

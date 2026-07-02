@@ -4,17 +4,101 @@ Run with: streamlit run app.py
 """
 
 import asyncio
+import uuid
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import Command
 
 load_dotenv()
 
-from backend.graph.builder import content_graph
+from backend.graph.builder import build_graph, content_graph
 from backend.graph.state import ContentState
 from backend.publishing import publisher_client
+
+
+@st.cache_resource
+def get_hitl_graph():
+    """Checkpointed graph for the human-in-the-loop flow.
+
+    Cached as a process-wide singleton so the in-memory checkpoint survives the
+    Streamlit reruns between pausing for plan approval and resuming after it.
+    """
+    return build_graph(checkpointer=MemorySaver())
+
+
+# Per-node progress weights + labels, shared by every streaming pass.
+NODE_WEIGHTS = {
+    "rag_retriever": 0.10,
+    "trend_researcher": 0.18,
+    "planner": 0.13,
+    "plan_review": 0.04,
+    "blog_writer": 0.08,
+    "social_writer": 0.08,
+    "email_writer": 0.08,
+    "ad_writer": 0.08,
+    "qa": 0.13,
+    "publisher": 0.10,
+}
+AGENT_LABELS = {
+    "rag_retriever": "🔍 RAG Retriever — fetching brand context",
+    "trend_researcher": "📊 Trend Researcher — searching web for keywords",
+    "planner": "📅 Planner — building content calendar",
+    "plan_review": "📋 Plan Review — approval gate",
+    "blog_writer": "✍️  Blog Writer — drafting blog post",
+    "social_writer": "📱 Social Writer — drafting social copy",
+    "email_writer": "📧 Email Writer — drafting newsletter",
+    "ad_writer": "🎯 Ad Writer — drafting ad copy",
+    "qa": "🔎 QA Agent — scoring brand voice & SEO",
+    "publisher": "📤 Publisher — pushing to Notion & Buffer",
+}
+
+
+def render_and_stream(graph, graph_input, config=None, *, expect_pause=False):
+    """Stream a graph run, rendering live progress, and return the collected
+    node outputs. With ``expect_pause`` the run is expected to interrupt (HITL),
+    so the final "complete" banner is suppressed."""
+    st.subheader("⚡ Agent progress")
+    progress_bar = st.progress(0.0)
+    status_text = st.empty()
+    agent_log = st.empty()
+    log_lines: list[str] = []
+
+    async def _run():
+        _progress = 0.0
+        collected: dict = {}
+        async for event in graph.astream_events(
+            graph_input, config=config, version="v2"
+        ):
+            kind = event.get("event", "")
+            node = event.get("name", "")
+
+            if kind == "on_chain_start" and node in AGENT_LABELS:
+                label = AGENT_LABELS[node]
+                status_text.info(f"Running: {label}")
+                log_lines.append(f"⏳ {label}")
+                agent_log.text("\n".join(log_lines[-8:]))
+
+            elif kind == "on_chain_end" and node in NODE_WEIGHTS:
+                _progress = min(_progress + NODE_WEIGHTS.get(node, 0.05), 1.0)
+                progress_bar.progress(_progress)
+                label = AGENT_LABELS.get(node, node)
+                log_lines.append(f"✅ {label}")
+                agent_log.text("\n".join(log_lines[-8:]))
+
+                output = event.get("data", {}).get("output", {})
+                if output:
+                    collected.update(output)
+        return collected
+
+    collected = asyncio.run(_run())
+    if not expect_pause:
+        progress_bar.progress(1.0)
+        status_text.success("✅ All agents complete!")
+    return collected
 
 st.set_page_config(
     page_title="AI Content Marketing Engine",
@@ -44,6 +128,13 @@ with st.sidebar:
         "Content channels",
         ["blog", "social", "email", "ad"],
         default=["blog", "social"],
+    )
+
+    review_plan = st.checkbox(
+        "👀 Review plan before writing",
+        value=False,
+        help="Pause after the planner to approve or edit the content calendar "
+        "before any drafts are generated (saves tokens on a wrong plan).",
     )
 
     st.divider()
@@ -78,7 +169,7 @@ with st.sidebar:
         use_container_width=True,
     )
 
-# ── Main area: Results ───────────────────────────────────────────────────────
+# ── Main area: run / approval gate ───────────────────────────────────────────
 if run_btn:
     if not brand_name or not brief or not channels:
         st.error("Please fill in brand name, brief, and select at least one channel.")
@@ -89,6 +180,7 @@ if run_btn:
         "brand_name": brand_name,
         "target_audience": target_audience,
         "channels": channels,
+        "require_approval": review_plan,
         "brand_context": "",
         "rag_sources": [],
         "trending_keywords": [],
@@ -107,66 +199,106 @@ if run_btn:
         "messages": [],
     }
 
-    # ── Live progress section ────────────────────────────────────────────────
-    st.subheader("⚡ Agent progress")
-    progress_bar = st.progress(0.0)
-    status_text = st.empty()
-    agent_log = st.empty()
+    if review_plan:
+        # Human-in-the-loop: run up to the planner, then pause for approval.
+        graph = get_hitl_graph()
+        thread_id = str(uuid.uuid4())
+        st.session_state["hitl_thread_id"] = thread_id
+        config = {"configurable": {"thread_id": thread_id}}
 
-    NODE_WEIGHTS = {
-        "rag_retriever": 0.10,
-        "trend_researcher": 0.20,
-        "planner": 0.15,
-        "blog_writer": 0.08,
-        "social_writer": 0.08,
-        "email_writer": 0.08,
-        "ad_writer": 0.08,
-        "qa": 0.13,
-        "publisher": 0.10,
-    }
-    log_lines = []
+        render_and_stream(graph, initial_state, config, expect_pause=True)
+        snapshot = graph.get_state(config)
 
-    AGENT_LABELS = {
-        "rag_retriever": "🔍 RAG Retriever — fetching brand context",
-        "trend_researcher": "📊 Trend Researcher — searching web for keywords",
-        "planner": "📅 Planner — building content calendar",
-        "blog_writer": "✍️  Blog Writer — drafting blog post",
-        "social_writer": "📱 Social Writer — drafting social copy",
-        "email_writer": "📧 Email Writer — drafting newsletter",
-        "ad_writer": "🎯 Ad Writer — drafting ad copy",
-        "qa": "🔎 QA Agent — scoring brand voice & SEO",
-        "publisher": "📤 Publisher — pushing to Notion & Buffer",
-    }
+        if snapshot.next:  # paused at plan_review, awaiting human input
+            st.session_state["hitl_phase"] = "awaiting_approval"
+            st.session_state["hitl_calendar"] = snapshot.values.get(
+                "content_calendar", []
+            )
+            st.session_state["hitl_themes"] = snapshot.values.get("monthly_themes", [])
+            st.session_state.pop("final_state", None)
+            st.rerun()
+        else:  # nothing to approve (e.g. empty plan) — just take what we have
+            st.session_state["final_state"] = snapshot.values
+            st.session_state.pop("hitl_phase", None)
+    else:
+        # Non-interactive: run the checkpointer-less graph straight through.
+        st.session_state["final_state"] = render_and_stream(content_graph, initial_state)
+        st.session_state.pop("hitl_phase", None)
 
-    async def run_with_streaming():
-        _progress = 0.0
-        collected = {}
-        async for event in content_graph.astream_events(initial_state, version="v2"):
-            kind = event.get("event", "")
-            node = event.get("name", "")
+# ── Plan approval gate (renders while a HITL run is paused) ───────────────────
+# The entire gate lives inside ONE st.empty() placeholder so it can be wiped the
+# instant the user approves/cancels. Without this, the Approve/Cancel buttons
+# linger as clickable "ghost" widgets during the long generating run (Streamlit
+# keeps previously-rendered widgets at the same layout slot until the run that
+# replaces them finishes) — and a click on a ghost button interrupts the in-
+# flight run and re-enters the writers.
+#   awaiting_approval → render the editable plan + buttons (the ONLY place they
+#                       exist). A click captures the edits, wipes the gate, and
+#                       flips to "generating".
+#   generating        → gate emptied first → no clickable buttons during the run.
+#                       Resume happens once, also guarded by get_state().next.
+hitl_phase = st.session_state.get("hitl_phase")
 
-            if kind == "on_chain_start" and node in AGENT_LABELS:
-                label = AGENT_LABELS[node]
-                status_text.info(f"Running: {label}")
-                log_lines.append(f"⏳ {label}")
-                agent_log.text("\n".join(log_lines[-8:]))
+if hitl_phase in ("awaiting_approval", "generating"):
+    gate = st.empty()
 
-            elif kind == "on_chain_end" and node in NODE_WEIGHTS:
-                _progress = min(_progress + NODE_WEIGHTS.get(node, 0.05), 1.0)
-                progress_bar.progress(_progress)
-                label = AGENT_LABELS.get(node, node)
-                log_lines.append(f"✅ {label}")
-                agent_log.text("\n".join(log_lines[-8:]))
+if hitl_phase == "awaiting_approval":
+    with gate.container():
+        st.subheader("📋 Review the content plan")
+        st.caption(
+            "Edit topics, CTAs, keywords, or notes below, then approve to "
+            "generate. No drafts have been written yet — nothing is wasted if "
+            "you change the plan."
+        )
 
-                output = event.get("data", {}).get("output", {})
-                if output:
-                    collected.update(output)
+        themes = st.session_state.get("hitl_themes", [])
+        if themes:
+            st.write("**Monthly themes:**", " · ".join(themes))
 
-        progress_bar.progress(1.0)
-        status_text.success("✅ All agents complete!")
-        return collected
+        edited_df = st.data_editor(
+            pd.DataFrame(st.session_state.get("hitl_calendar", [])),
+            use_container_width=True,
+            num_rows="dynamic",
+            key="plan_editor",
+        )
 
-    st.session_state["final_state"] = asyncio.run(run_with_streaming())
+        col_approve, col_cancel, _ = st.columns([2, 1, 4])
+        approve = col_approve.button(
+            "✅ Approve & generate", type="primary", use_container_width=True
+        )
+        cancel = col_cancel.button("✖ Cancel", use_container_width=True)
+
+    if cancel:
+        gate.empty()  # remove the buttons immediately
+        for key in ("hitl_phase", "hitl_calendar", "hitl_themes"):
+            st.session_state.pop(key, None)
+        st.rerun()
+
+    if approve:
+        gate.empty()  # remove the buttons immediately
+        # Capture edits now — the editor isn't rendered in the generating phase.
+        st.session_state["hitl_edited_calendar"] = edited_df.to_dict("records")
+        st.session_state["hitl_phase"] = "generating"
+        st.rerun()
+
+elif hitl_phase == "generating":
+    gate.empty()  # wipe any lingering approval widgets before the long run
+    graph = get_hitl_graph()
+    config = {"configurable": {"thread_id": st.session_state["hitl_thread_id"]}}
+
+    # Resume only if the thread is genuinely still paused at the interrupt; once
+    # it has moved past plan_review, .next is empty and we must not resume again.
+    if graph.get_state(config).next:
+        decision = {
+            "approved": True,
+            "content_calendar": st.session_state.get("hitl_edited_calendar", []),
+        }
+        render_and_stream(graph, Command(resume=decision), config)
+
+    st.session_state["final_state"] = graph.get_state(config).values
+    for key in ("hitl_phase", "hitl_edited_calendar", "hitl_calendar", "hitl_themes"):
+        st.session_state.pop(key, None)
+    st.rerun()
 
 # ── Results tabs (persist across reruns via session_state) ────────────────────
 final_state = st.session_state.get("final_state")

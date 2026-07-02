@@ -8,11 +8,12 @@ A **production-grade multi-agent AI system** that turns a single brand brief int
 2. Researches trending topics via web search (Serper)
 3. Retrieves brand voice context from uploaded documents (RAG via Qdrant)
 4. Builds a 4-week content calendar
-5. Generates blog posts, social copy, email newsletters, and ad copy **in parallel**
-6. Runs a QA agent that scores each piece and sends failed pieces back for revision (max 2 rounds)
-7. Publishes approved content to Notion and Buffer (falls back to local `./output/` files)
-8. Streams live progress to the Streamlit UI as each agent completes
-9. Publishes blog posts to **Storyblok** as draft stories via a dedicated FastAPI publishing service
+5. *(Optional)* Pauses for **human approval** of the calendar — edit or approve it before any drafts are written
+6. Generates blog posts, social copy, email newsletters, and ad copy **in parallel**
+7. Runs a QA agent that scores each piece and sends failed pieces back for revision (max 2 rounds)
+8. Publishes approved content to Notion and Buffer (falls back to local `./output/` files)
+9. Streams live progress to the Streamlit UI as each agent completes
+10. Publishes blog posts to **Storyblok** as draft stories via a dedicated FastAPI publishing service
 
 ## Tech stack
 
@@ -34,12 +35,21 @@ START
   → rag_retriever          (populates brand_context from Qdrant)
   → trend_researcher       (web search → keywords + gaps)
   → planner                (builds content calendar JSON)
+  → plan_review            (HITL gate: pauses for human approval iff require_approval)
   → [Send() fan-out]       (parallel: blog_writer, social_writer, email_writer, ad_writer)
   → qa                     (scores all pieces, routes approved vs rejected)
   → [conditional]          (if rejected & revision_round < 2 → fan back to writers)
   → publisher              (pushes to Notion + Buffer)
 END
 ```
+
+**Human-in-the-loop (optional).** Tick *"Review plan before writing"* in the sidebar
+to pause the run at `plan_review`: the proposed calendar is surfaced in an editable
+table and **no drafts are generated until you approve** (edits flow straight into the
+writers). This path runs on a checkpointed graph
+(`build_graph(checkpointer=MemorySaver())`); the default non-interactive run is
+unaffected and needs no checkpointer. Implemented with LangGraph's `interrupt()` /
+`Command(resume=...)` — see `backend/agents/plan_review.py`.
 
 All agents read from and write to a single shared `ContentState` TypedDict (see `backend/graph/state.py`).
 
