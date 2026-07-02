@@ -2,6 +2,10 @@
 
 A **production-grade multi-agent AI system** that turns a single brand brief into a full month of marketing content. Built on LangGraph with a parallel writer fan-out, a QA → revision loop, RAG-backed brand voice, web-search trend research, and one-click publishing to Notion and Buffer.
 
+## Demo
+
+[![Watch the demo](https://cdn.loom.com/sessions/thumbnails/78e54629481a4c1e88f53b4dde1c4955-with-play.gif)](https://www.loom.com/share/78e54629481a4c1e88f53b4dde1c4955)
+
 ## What it does
 
 1. Takes a user's brand brief as input
@@ -42,6 +46,8 @@ START
   → publisher              (pushes to Notion + Buffer)
 END
 ```
+
+![LangGraph agent graph](docs/graph.png)
 
 **Human-in-the-loop (optional).** Tick *"Review plan before writing"* in the sidebar
 to pause the run at `plan_review`: the proposed calendar is surfaced in an editable
