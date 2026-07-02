@@ -15,8 +15,9 @@ never crashes the graph.
 """
 
 import os
-from langchain_core.tools import tool
+
 from langchain_community.utilities import GoogleSerperAPIWrapper
+from langchain_core.tools import tool
 
 
 def _serper_key() -> str:

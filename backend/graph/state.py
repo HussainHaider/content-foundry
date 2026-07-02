@@ -4,7 +4,8 @@ Central shared state for the entire LangGraph pipeline.
 Every node receives the full state and returns a partial dict to update it.
 """
 
-from typing import TypedDict, Annotated, Literal
+from typing import Annotated, Literal, TypedDict
+
 from langgraph.graph.message import add_messages
 
 
@@ -23,6 +24,7 @@ class ContentPiece(TypedDict):
     draft: str
     seo_score: float  # 0.0 to 1.0, set by QA agent
     qa_passed: bool  # Set by QA agent
+    qa_feedback: str  # Per-piece QA feedback (authoritative for revisions)
     revision_count: int  # Incremented each time QA rejects
     published_url: str | None  # Set by publisher agent
 
@@ -33,6 +35,9 @@ class ContentState(TypedDict):
     brand_name: str
     target_audience: str
     channels: list[Literal["blog", "social", "email", "ad"]]
+    # When True, the graph pauses after the planner for human plan approval
+    # (requires a checkpointed graph). When False, plan_review is a pass-through.
+    require_approval: bool
 
     # ── RAG output (set by rag_retriever node) ──────────────────────
     brand_context: str  # Concatenated brand doc chunks
@@ -53,7 +58,10 @@ class ContentState(TypedDict):
     revision_target: dict  # Set during re-write loops
 
     # ── QA outputs ─────────────────────────────────────────────────
-    qa_feedback: dict[str, str]  # {channel: "feedback text"}
+    # Keyed by "channel::topic" (a stable per-piece key) so feedback for
+    # multiple pieces on the same channel never collides. Used for
+    # observability; the authoritative copy lives on each ContentPiece.
+    qa_feedback: dict[str, str]
     approved_pieces: list[ContentPiece]  # Passed QA
     rejected_pieces: list[ContentPiece]  # Failed QA, need revision
 

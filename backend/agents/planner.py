@@ -13,10 +13,11 @@ Each entry includes: week number, channel, topic title, focus keywords, CTA, and
 The 'notes' field gives the writer a strategic angle to follow.
 """
 
-import os
 import json
 import re
-from langchain_core.messages import SystemMessage, HumanMessage
+
+from langchain_core.messages import HumanMessage, SystemMessage
+
 from backend.graph.state import ContentState
 from backend.llm import get_llm
 

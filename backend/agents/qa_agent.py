@@ -16,14 +16,22 @@ Pass threshold: score >= 0.75
 Failed pieces get specific, actionable feedback that the writer can act on.
 """
 
-import os
 import json
 import re
-from langchain_core.messages import SystemMessage, HumanMessage
-from backend.graph.state import ContentState, ContentPiece
+
+from langchain_core.messages import HumanMessage, SystemMessage
+
+from backend.graph.state import ContentPiece, ContentState
 from backend.llm import get_llm
 
 llm = get_llm(temperature=0.1)  # Low temperature for consistent, strict evaluation
+
+
+def _feedback_key(piece: ContentPiece) -> str:
+    """Stable per-piece key so feedback for two pieces on the same channel
+    (e.g. a week-1 and a week-2 blog) never overwrite each other."""
+    return f"{piece['channel']}::{piece['topic']}"
+
 
 SYSTEM_PROMPT = """You are a senior content QA editor and brand guardian.
 Evaluate each content piece strictly but fairly.
@@ -134,17 +142,21 @@ Evaluate every piece. In your JSON, the "topic" field MUST exactly match the top
         if not matching:
             continue
 
+        feedback = result.get("feedback", "")
         updated: ContentPiece = {
             **matching,
             "seo_score": result.get("seo_score", 0.0),
             "qa_passed": result.get("passed", False),
+            "qa_feedback": "" if result.get("passed", False) else feedback,
             "revision_count": matching.get("revision_count", 0) + 1,
         }
 
         if result.get("passed", False):
             approved.append(updated)
         else:
-            qa_feedback[result["channel"]] = result.get("feedback", "")
+            # Key by the stable per-piece key, not by channel, so concurrent
+            # rejections on the same channel don't clobber each other.
+            qa_feedback[_feedback_key(updated)] = feedback
             rejected.append(updated)
 
     return {

@@ -1,0 +1,27 @@
+[project]
+name = "content-foundry"
+version = "1.0.0"
+description = "Multi-agent LangGraph content marketing engine"
+requires-python = ">=3.13"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+extend-exclude = ["venv", ".venv", "output", "brand_docs"]
+
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes, I: isort, UP: pyupgrade, B: bugbear
+select = ["E", "W", "F", "I", "UP", "B"]
+ignore = [
+    "E501",  # line length is enforced by the formatter, not the linter
+]
+
+[tool.ruff.lint.per-file-ignores]
+# app.py must call load_dotenv() before importing backend modules that read
+# env vars at import time, so its imports are intentionally not at the top.
+"app.py" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+# Dummy API keys for import-time clients are injected by tests/conftest.py.

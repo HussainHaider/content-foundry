@@ -14,11 +14,12 @@ If NOTION_TOKEN or BUFFER_TOKEN not set, saves content to local files in ./outpu
 """
 
 import os
-import json
-import httpx
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from backend.graph.state import ContentState, ContentPiece
+
+import httpx
+
+from backend.graph.state import ContentPiece, ContentState
 
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
 NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID", "")
@@ -86,7 +87,9 @@ def _publish_to_notion(piece: ContentPiece) -> str | None:
 def _publish_to_buffer(piece: ContentPiece, index: int = 0) -> str | None:
     if not BUFFER_TOKEN or not BUFFER_PROFILE_IDS:
         return None
-    scheduled = (datetime.utcnow() + timedelta(days=index + 1)).isoformat() + "Z"
+    scheduled = (datetime.now(UTC) + timedelta(days=index + 1)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
     for profile_id in BUFFER_PROFILE_IDS:
         try:
             resp = httpx.post(

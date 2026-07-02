@@ -35,7 +35,7 @@ class StoryblokConfig:
     blog_parent_id: str | None = None
 
     @classmethod
-    def from_env(cls) -> "StoryblokConfig":
+    def from_env(cls) -> StoryblokConfig:
         return cls(
             management_token=os.environ.get("STORYBLOK_MANAGEMENT_TOKEN", "").strip(),
             space_id=os.environ.get("STORYBLOK_SPACE_ID", "").strip(),

@@ -11,13 +11,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from backend.publishing.storyblok.config import StoryblokConfig
 from backend.publishing.storyblok.client import (
-    StoryblokManagementClient,
     StoryblokError,
+    StoryblokManagementClient,
 )
+from backend.publishing.storyblok.config import StoryblokConfig
+from backend.publishing.storyblok.mapper import piece_to_story, slugify, split_h1
 from backend.publishing.storyblok.markdown_blocks import markdown_to_text_bloks
-from backend.publishing.storyblok.mapper import slugify, split_h1, piece_to_story
 from backend.publishing.storyblok.schema import (
     ResolvedSchema,
     SchemaError,
@@ -276,6 +276,7 @@ def test_service_isolates_per_piece_failure(config):
 # ── FastAPI auth / endpoint ───────────────────────────────────────────────────
 def test_api_rejects_without_key(monkeypatch):
     from fastapi.testclient import TestClient
+
     from backend.api.main import app
 
     monkeypatch.setenv("PUBLISHER_API_KEY", "secret")
@@ -288,6 +289,7 @@ def test_api_rejects_without_key(monkeypatch):
 
 def test_api_503_when_key_unset(monkeypatch):
     from fastapi.testclient import TestClient
+
     from backend.api.main import app
 
     monkeypatch.delenv("PUBLISHER_API_KEY", raising=False)
@@ -302,6 +304,7 @@ def test_api_503_when_key_unset(monkeypatch):
 
 def test_api_publish_success(monkeypatch):
     from fastapi.testclient import TestClient
+
     import backend.api.main as main
 
     monkeypatch.setenv("PUBLISHER_API_KEY", "secret")
@@ -331,6 +334,7 @@ def test_api_publish_success(monkeypatch):
 
 def test_api_health(monkeypatch):
     from fastapi.testclient import TestClient
+
     from backend.api.main import app
 
     monkeypatch.delenv("STORYBLOK_MANAGEMENT_TOKEN", raising=False)
